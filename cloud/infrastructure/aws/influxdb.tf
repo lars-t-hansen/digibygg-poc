@@ -23,7 +23,11 @@ resource "aws_instance" "influxdb" {
   ami = "${var.influxdb_ami}"
   availability_zone = "${var.av_zone}"
   instance_type = "${var.influxdb_instance_type}"
-  vpc_security_group_ids = ["${aws_security_group.allow_http.id}", "${aws_security_group.allow_ssh.id}"]
+  vpc_security_group_ids = [
+    "${aws_security_group.allow_ssh.id}", 
+    "${aws_security_group.allow_grafana.id}", 
+    "${aws_security_group.allow_influxdb.id}"
+  ]
   subnet_id = "${aws_subnet.public_a.id}"
   associate_public_ip_address = "${var.public}"
 
@@ -106,6 +110,32 @@ resource "aws_security_group" "allow_grafana" {
 
   tags {
     Name = "grafana.${var.project}.${var.environment}"
+    Environment = "${var.environment}"
+    Project     = "${var.project}"
+  }
+}
+
+resource "aws_security_group" "allow_influxdb" {
+  name = "influxdb-${var.project}-${var.environment}"
+  vpc_id = "${aws_vpc.main.id}"
+  description = "Allow connections to InlufxDB"
+
+  ingress {
+    from_port = 8086
+    to_port = 8086
+    protocol = "tcp"
+    self = true
+  }
+
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags {
+    Name = "influxdb.${var.project}.${var.environment}"
     Environment = "${var.environment}"
     Project     = "${var.project}"
   }
