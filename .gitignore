@@ -1,0 +1,12 @@
+.git/
+
+*.tfstate
+*.tfstate.backup
+*.tfvars
+.terraform/
+
+*.pem
+
+cloud/image/
+
+build/
