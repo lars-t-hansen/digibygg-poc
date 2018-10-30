@@ -1,0 +1,3 @@
+config_schema:
+  - ["device.id", "s", "poc", {title: "Device id"}]
+  - ["device.password", "s", "poc", {title: "Device id"}]
