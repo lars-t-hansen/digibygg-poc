@@ -9,15 +9,34 @@ mongoose_os_version: ${mos.version}
 
 tags:
   - c
+  - i2c
+  - device
+  - wifi
+  - location
 sources:
   - src
 filesystem:
   - fs
 
 config_schema:
+# GENERAL CONFIG
   - ["mqtt.publish", "s", "/response", {title: "Publish topic"}]
   - ["mqtt.sub", "s", "/request", {title: "Subscribe topic"}]
+
   - ["i2c.enable", true]
+  - ["i2c.sda_gpio", "i", 19, {title: "GPIO to use for SDA"}]
+  - ["i2c.scl_gpio", "i", 18, {title: "GPIO to use for SCL"}]
+
+  - ["wifi.sta.ssid", "s", "ssid", {title: "SSID for wifi"}]
+  - ["wifi.sta.pass", "s", "pass", {title: "Password for wifi"}]
+
+# DEVICE CONFIG
+  - ["device.id", "s", "poc0", {title: "Device id"}]
+  - ["device.password", "s", "poc0", {title: "Device id"}]
+
+  - ["location", "o", {title: "Location info"}]
+  - ["location.name", "s", "name", {title: "Name of location"}]
+  - ["location.floor", "i", 0, {title: "Floor of location"}]
 
 libs:
   - origin: https://github.com/mongoose-os-libs/ca-bundle
