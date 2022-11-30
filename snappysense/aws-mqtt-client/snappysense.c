@@ -42,6 +42,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef NDEBUG
+#include <stdio.h>
+#endif
 
 /* POSIX includes. */
 #include <unistd.h>
@@ -73,14 +76,15 @@
 
 #include "logging_stack.h"
 
+#include "configfile.h"
+
 /**
  * @brief Details of the MQTT broker to connect to.
  *
  * @note Your AWS IoT Core endpoint can be found in the AWS IoT console under
  * Settings/Custom Endpoint, or using the describe-endpoint API.
  */
-/* FIXME: Read from config file */
-#define AWS_IOT_ENDPOINT               "a1igkxc4s40b07-ats.iot.eu-central-1.amazonaws.com"
+const char* AWS_IOT_ENDPOINT;
 
 /**
  * @brief AWS IoT MQTT broker port number.
@@ -105,8 +109,7 @@
  * @note This path is relative from the demo binary created. Update
  * ROOT_CA_CERT_PATH to the absolute path if this demo is executed from elsewhere.
  */
-/* FIXME: Read absolute path from config file */
-#define ROOT_CA_CERT_PATH    "/home/pi/p/aws/AmazonRootCA1.pem"
+const char* ROOT_CA_CERT_PATH;
 
 /**
  * @brief Path of the file containing the client certificate.
@@ -116,11 +119,8 @@
  * https://docs.aws.amazon.com/iot/latest/developerguide/client-authentication.html
  *
  * @note This certificate should be PEM-encoded.
- *
- * #define CLIENT_CERT_PATH    "...insert here..."
  */
-/* FIXME: Read absolute path from config file */
-#define CLIENT_CERT_PATH    "/home/pi/p/aws/certificate.pem.crt"
+const char* CLIENT_CERT_PATH;
 
 /**
  * @brief Path of the file containing the client's private key.
@@ -130,19 +130,15 @@
  * https://docs.aws.amazon.com/iot/latest/developerguide/client-authentication.html
  *
  * @note This private key should be PEM-encoded.
- *
- * #define CLIENT_PRIVATE_KEY_PATH    "...insert here..."
  */
-/* FIXME: Read absolute path from config file */
-#define CLIENT_PRIVATE_KEY_PATH    "/home/pi/p/aws/private.pem.key"
+const char* CLIENT_PRIVATE_KEY_PATH;
 
 /**
  * @brief MQTT client identifier.
  *
  * No two clients may use the same client identifier simultaneously.
  */
-/* FIXME: Read from config file */
-#define CLIENT_IDENTIFIER    "RPi2"
+const char* CLIENT_IDENTIFIER;
 
 /**
  * @brief Size of the network buffer for MQTT packets.
@@ -154,40 +150,27 @@
  * The current value is given as an example. Please update for your specific
  * operating system.
  */
-/* FIXME: Read from config file or derive by other means */
-#define OS_NAME                   "Raspberry_Pi_OS"
+const char* OS_NAME;
 
 /**
  * @brief The version of the operating system that the application is running
  * on. The current value is given as an example. Please update for your specific
  * operating system version.
  */
-/* FIXME: Read from config file or derive by other means */
-#define OS_VERSION                "September_2022"
+const char* OS_VERSION;
 
 /**
  * @brief The name of the hardware platform the application is running on. The
  * current value is given as an example. Please update for your specific
  * hardware platform.
  */
-/* FIXME: Read from config file or derive by other means */
-#define HARDWARE_PLATFORM_NAME    "Raspberry_Pi_2"
+const char* HARDWARE_PLATFORM_NAME;
 
 /**
  * @brief The name of the MQTT library used and its version, following an "@"
  * symbol.
  */
 #define MQTT_LIB    "core-mqtt@" MQTT_LIBRARY_VERSION
-
-/**
- * @brief Length of MQTT server host name.
- */
-#define AWS_IOT_ENDPOINT_LENGTH                  ( ( uint16_t ) ( sizeof( AWS_IOT_ENDPOINT ) - 1 ) )
-
-/**
- * @brief Length of client identifier.
- */
-#define CLIENT_IDENTIFIER_LENGTH                 ( ( uint16_t ) ( sizeof( CLIENT_IDENTIFIER ) - 1 ) )
 
 /**
  * @brief The maximum number of retries for connecting to server.
@@ -215,13 +198,7 @@
  * The topic name starts with the client identifier to ensure that each demo
  * interacts with a unique topic name.
  */
-/* FIXME: Read from config file? */
-#define MQTT_TOPIC                       "snappy/device_reading"
-
-/**
- * @brief Length of client MQTT topic.
- */
-#define MQTT_TOPIC_LENGTH                ( ( uint16_t ) ( sizeof( MQTT_TOPIC ) - 1 ) )
+const char* MQTT_TOPIC;
 
 /**
  * @brief Maximum number of outgoing publishes maintained in the application
@@ -272,17 +249,6 @@
  * @brief Transport timeout in milliseconds for transport send and receive.
  */
 #define TRANSPORT_SEND_RECV_TIMEOUT_MS           ( 500 )
-
-/**
- * @brief The MQTT metrics string expected by AWS IoT.
- */
-/* FIXME: Are there restrictions on the allowable characters in these? */
-#define METRICS_STRING                           "?SDK=" OS_NAME "&Version=" OS_VERSION "&Platform=" HARDWARE_PLATFORM_NAME "&MQTTLib=" MQTT_LIB
-
-/**
- * @brief The length of the MQTT metrics string expected by AWS IoT.
- */
-#define METRICS_STRING_LENGTH                    ( ( uint16_t ) ( sizeof( METRICS_STRING ) - 1 ) )
 
 /**
  * @brief The length of the outgoing publish records array used by the coreMQTT
@@ -641,7 +607,7 @@ static int connectToServerWithBackoffRetries( NetworkContext_t * pNetworkContext
 
     /* Initialize information to connect to the MQTT broker. */
     serverInfo.pHostName = AWS_IOT_ENDPOINT;
-    serverInfo.hostNameLength = AWS_IOT_ENDPOINT_LENGTH;
+    serverInfo.hostNameLength = (uint16_t)strlen(AWS_IOT_ENDPOINT);
     serverInfo.port = AWS_MQTT_PORT;
 
     /* Initialize credentials for establishing TLS session. */
@@ -673,7 +639,7 @@ static int connectToServerWithBackoffRetries( NetworkContext_t * pNetworkContext
          * to the MQTT broker as specified in AWS_IOT_ENDPOINT and AWS_MQTT_PORT
          * at the demo config header. */
         LogInfo( ( "Establishing a TLS session to %.*s:%d.",
-                   AWS_IOT_ENDPOINT_LENGTH,
+                   strlen(AWS_IOT_ENDPOINT),
                    AWS_IOT_ENDPOINT,
                    AWS_MQTT_PORT ) );
         opensslStatus = Openssl_Connect( pNetworkContext,
@@ -879,7 +845,7 @@ static void handleIncomingPublish( MQTTPublishInfo_t * pPublishInfo,
     LogInfo( ( "Incoming QOS : %d.", pPublishInfo->qos ) );
 
     /* Verify the received publish is for the topic we have subscribed to. */
-    if( ( pPublishInfo->topicNameLength == MQTT_TOPIC_LENGTH ) &&
+    if( ( pPublishInfo->topicNameLength == strlen(MQTT_TOPIC) ) &&
         ( 0 == strncmp( MQTT_TOPIC,
                         pPublishInfo->pTopicName,
                         pPublishInfo->topicNameLength ) ) )
@@ -959,7 +925,7 @@ static int handleResubscribe( MQTTContext_t * pMqttContext )
         }
 
         LogInfo( ( "SUBSCRIBE sent for topic %.*s to broker.\n\n",
-                   MQTT_TOPIC_LENGTH,
+                   strlen(MQTT_TOPIC),
                    MQTT_TOPIC ) );
 
         /* Process incoming packet. */
@@ -1046,7 +1012,7 @@ static void eventCallback( MQTTContext_t * pMqttContext,
                 if( globalSubAckStatus != MQTTSubAckFailure )
                 {
                     LogInfo( ( "Subscribed to the topic %.*s. with maximum QoS %u.\n\n",
-                               MQTT_TOPIC_LENGTH,
+                               strlen(MQTT_TOPIC),
                                MQTT_TOPIC,
                                globalSubAckStatus ) );
                 }
@@ -1062,7 +1028,7 @@ static void eventCallback( MQTTContext_t * pMqttContext,
 #if 0
             case MQTT_PACKET_TYPE_UNSUBACK:
                 LogInfo( ( "Unsubscribed from the topic %.*s.\n\n",
-                           MQTT_TOPIC_LENGTH,
+                           strlen(MQTT_TOPIC),
                            MQTT_TOPIC ) );
                 /* Make sure ACK packet identifier matches with Request packet identifier. */
                 assert( globalUnsubscribePacketIdentifier == packetIdentifier );
@@ -1122,7 +1088,7 @@ static int establishMqttSession( MQTTContext_t * pMqttContext,
      * the MQTT broker. In a production device the identifier can be something
      * unique, such as a device serial number. */
     connectInfo.pClientIdentifier = CLIENT_IDENTIFIER;
-    connectInfo.clientIdentifierLength = CLIENT_IDENTIFIER_LENGTH;
+    connectInfo.clientIdentifierLength = strlen(CLIENT_IDENTIFIER);
 
     /* The maximum time interval in seconds which is allowed to elapse
      * between two Control Packets.
@@ -1133,8 +1099,14 @@ static int establishMqttSession( MQTTContext_t * pMqttContext,
     connectInfo.keepAliveSeconds = MQTT_KEEP_ALIVE_INTERVAL_SECONDS;
 
     /* No username/password auth */
-    connectInfo.pUserName = METRICS_STRING;
-    connectInfo.userNameLength = METRICS_STRING_LENGTH;
+
+    char metrics[1024];
+    /* FIXME: Deal with overflow */
+    snprintf(metrics, sizeof(metrics), "?SDK=%s&Version=%s&Platform=%s&MQTTLib=%s",
+	     OS_NAME, OS_VERSION, HARDWARE_PLATFORM_NAME, MQTT_LIB);
+
+    connectInfo.pUserName = metrics;
+    connectInfo.userNameLength = strlen(metrics);
     /* Password for authentication is not used. */
     connectInfo.pPassword = NULL;
     connectInfo.passwordLength = 0U;
@@ -1194,7 +1166,7 @@ static int subscribeToTopic( MQTTContext_t * pMqttContext )
     /* This example subscribes to only one topic and uses QOS1. */
     pGlobalSubscriptionList[ 0 ].qos = MQTTQoS1;
     pGlobalSubscriptionList[ 0 ].pTopicFilter = MQTT_TOPIC;
-    pGlobalSubscriptionList[ 0 ].topicFilterLength = MQTT_TOPIC_LENGTH;
+    pGlobalSubscriptionList[ 0 ].topicFilterLength = strlen(MQTT_TOPIC);
 
     /* Generate packet identifier for the SUBSCRIBE packet. */
     globalSubscribePacketIdentifier = MQTT_GetPacketId( pMqttContext );
@@ -1214,7 +1186,7 @@ static int subscribeToTopic( MQTTContext_t * pMqttContext )
     else
     {
         LogInfo( ( "SUBSCRIBE sent for topic %.*s to broker.\n\n",
-                   MQTT_TOPIC_LENGTH,
+                   strlen(MQTT_TOPIC),
                    MQTT_TOPIC ) );
     }
 
@@ -1239,7 +1211,7 @@ static int unsubscribeFromTopic( MQTTContext_t * pMqttContext )
      * and uses QOS1. */
     pGlobalSubscriptionList[ 0 ].qos = MQTTQoS1;
     pGlobalSubscriptionList[ 0 ].pTopicFilter = MQTT_TOPIC;
-    pGlobalSubscriptionList[ 0 ].topicFilterLength = MQTT_TOPIC_LENGTH;
+    pGlobalSubscriptionList[ 0 ].topicFilterLength = strlen(MQTT_TOPIC);
 
     /* Generate packet identifier for the UNSUBSCRIBE packet. */
     globalUnsubscribePacketIdentifier = MQTT_GetPacketId( pMqttContext );
@@ -1259,7 +1231,7 @@ static int unsubscribeFromTopic( MQTTContext_t * pMqttContext )
     else
     {
         LogInfo( ( "UNSUBSCRIBE sent for topic %.*s to broker.\n\n",
-                   MQTT_TOPIC_LENGTH,
+                   strlen(MQTT_TOPIC),
                    MQTT_TOPIC ) );
     }
 
@@ -1299,7 +1271,7 @@ static int publishToTopic( MQTTContext_t * pMqttContext )
         /* This example publishes to only one topic and uses QOS1. */
         outgoingPublishPackets[ publishIndex ].pubInfo.qos = MQTTQoS1;
         outgoingPublishPackets[ publishIndex ].pubInfo.pTopicName = MQTT_TOPIC;
-        outgoingPublishPackets[ publishIndex ].pubInfo.topicNameLength = MQTT_TOPIC_LENGTH;
+        outgoingPublishPackets[ publishIndex ].pubInfo.topicNameLength = strlen(MQTT_TOPIC);
         outgoingPublishPackets[ publishIndex ].pubInfo.pPayload = msg;
         outgoingPublishPackets[ publishIndex ].pubInfo.payloadLength = strlen(msg);
 
@@ -1321,7 +1293,7 @@ static int publishToTopic( MQTTContext_t * pMqttContext )
         else
         {
             LogInfo( ( "PUBLISH sent for topic %.*s to broker with packet ID %u.\n\n",
-                       MQTT_TOPIC_LENGTH,
+                       strlen(MQTT_TOPIC),
                        MQTT_TOPIC,
                        outgoingPublishPackets[ publishIndex ].packetId ) );
         }
@@ -1406,7 +1378,7 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext )
          * to be sent back to it from the broker. This demo uses QOS1 in Subscribe,
          * therefore, the Publish messages received from the broker will have QOS1. */
         LogInfo( ( "Subscribing to the MQTT topic %.*s.",
-                   MQTT_TOPIC_LENGTH,
+                   strlen(MQTT_TOPIC),
                    MQTT_TOPIC ) );
         returnStatus = subscribeToTopic( pMqttContext );
     }
@@ -1433,7 +1405,7 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext )
          * Attempts are made according to the exponential backoff retry strategy
          * implemented in retryUtils. */
         LogInfo( ( "Server rejected initial subscription request. Attempting to re-subscribe to topic %.*s.",
-                   MQTT_TOPIC_LENGTH,
+                   strlen(MQTT_TOPIC),
                    MQTT_TOPIC ) );
         returnStatus = handleResubscribe( pMqttContext );
     }
@@ -1446,7 +1418,7 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext )
         for( publishCount = 0; publishCount < maxPublishCount; publishCount++ )
         {
             LogInfo( ( "Sending Publish to the MQTT topic %.*s.",
-                       MQTT_TOPIC_LENGTH,
+                       strlen(MQTT_TOPIC),
                        MQTT_TOPIC ) );
             returnStatus = publishToTopic( pMqttContext );
 
@@ -1480,7 +1452,7 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext )
     {
         /* Unsubscribe from the topic. */
         LogInfo( ( "Unsubscribing from the MQTT topic %.*s.",
-                   MQTT_TOPIC_LENGTH,
+                   strlen(MQTT_TOPIC),
                    MQTT_TOPIC ) );
         returnStatus = unsubscribeFromTopic( pMqttContext );
     }
@@ -1498,7 +1470,7 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext )
      * There is no corresponding response for the disconnect packet. After sending
      * disconnect, client must close the network connection. */
     LogInfo( ( "Disconnecting the MQTT connection with %.*s.",
-               AWS_IOT_ENDPOINT_LENGTH,
+               strlen(AWS_IOT_ENDPOINT),
                AWS_IOT_ENDPOINT ) );
 
     if( returnStatus == EXIT_FAILURE )
@@ -1593,6 +1565,15 @@ static MQTTStatus_t processLoopWithTimeout( MQTTContext_t * pMqttContext,
 
 /*-----------------------------------------------------------*/
 
+const char* must_lookup(config_file_t* cfg, const char *name) {
+  const char* v = lookup_config(cfg, name);
+  if (!v) {
+    fprintf(stderr, "Variable %s missing\n", name);
+    abort();
+  }
+  return v;
+}
+
 /**
  * @brief Entry point of demo.
  *
@@ -1610,6 +1591,28 @@ static MQTTStatus_t processLoopWithTimeout( MQTTContext_t * pMqttContext,
 int main( int argc,
           char ** argv )
 {
+  config_file_t cfg;
+  init_configfile(&cfg);
+  if (!read_configfile("snappysense.cfg", &cfg)) {
+    abort();
+  }
+#if 0
+#ifndef NDEBUG
+  dump_config(&cfg, stdout);
+#endif
+#endif
+  /* FIXME: the file also has the port number */
+  /* FIXME: Really OS Name, Version, and Hardware should be computed? */
+  AWS_IOT_ENDPOINT = must_lookup(&cfg, "AWS_IOT_ENDPOINT");
+  ROOT_CA_CERT_PATH = must_lookup(&cfg, "ROOT_CA_CERT_PATH");
+  CLIENT_CERT_PATH = must_lookup(&cfg, "CLIENT_CERT_PATH");
+  CLIENT_PRIVATE_KEY_PATH = must_lookup(&cfg, "CLIENT_PRIVATE_KEY_PATH");
+  CLIENT_IDENTIFIER = must_lookup(&cfg, "CLIENT_IDENTIFIER");
+  OS_NAME = must_lookup(&cfg, "OS_NAME");
+  OS_VERSION = must_lookup(&cfg, "OS_VERSION");
+  HARDWARE_PLATFORM_NAME = must_lookup(&cfg, "HARDWARE_PLATFORM_NAME");
+  MQTT_TOPIC = must_lookup(&cfg, "MQTT_TOPIC");
+
     int returnStatus = EXIT_SUCCESS;
     MQTTContext_t mqttContext = { 0 };
     NetworkContext_t networkContext = { 0 };
@@ -1651,7 +1654,7 @@ int main( int argc,
                 /* Log error to indicate connection failure after all
                  * reconnect attempts are over. */
                 LogError( ( "Failed to connect to MQTT broker %.*s.",
-                            AWS_IOT_ENDPOINT_LENGTH,
+                            strlen(AWS_IOT_ENDPOINT),
                             AWS_IOT_ENDPOINT ) );
             }
             else
@@ -1699,6 +1702,8 @@ int main( int argc,
             sleep( MQTT_SUBPUB_LOOP_DELAY_SECONDS );
         }
     }
+
+    destroy_configfile(&cfg);
 
     return returnStatus;
 }
