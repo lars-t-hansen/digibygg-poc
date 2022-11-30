@@ -167,6 +167,16 @@ const char* OS_VERSION;
 const char* HARDWARE_PLATFORM_NAME;
 
 /**
+ * Location strings.  If LAT or LON is present the other one should be, and in that
+ * case they are used, and ALT is reported if present.  If neither LAT or LON is present
+ * then there should be a LOC string.
+ */
+const char* MAYBE_LAT;
+const char* MAYBE_LON;
+const char* MAYBE_ALT;
+const char* MAYBE_LOC;
+
+/**
  * @brief The name of the MQTT library used and its version, following an "@"
  * symbol.
  */
@@ -1241,6 +1251,24 @@ static int unsubscribeFromTopic( MQTTContext_t * pMqttContext )
 
 /*-----------------------------------------------------------*/
 
+double read_temperature() {
+  static double temp = 1;
+  double t = temp;
+  temp += 1;
+  return t;
+}
+
+double read_humidity() {
+  static double hum = 100;
+  double h = hum;
+  hum += 1;
+  return h;
+}
+
+unsigned long long read_time() {
+  return (unsigned long long)time(NULL);
+}
+
 static int publishToTopic( MQTTContext_t * pMqttContext )
 {
     int returnStatus = EXIT_SUCCESS;
@@ -1261,12 +1289,12 @@ static int publishToTopic( MQTTContext_t * pMqttContext )
     }
     else
     {
-      static double temp = 1;
-      static double humidity = 100;
+      /* FIXME: Deal with overflow */
+      /* FIXME: The location and device ID should be read from a config file,
+	 indeed the device ID is probably the same as the CLIENT_IDENTIFIER? */
       char msg[1024];
-      sprintf(msg, "{\"device\": \"rpi2\", \"lat\": 59.95, \"lon\": 10.80, \"alt\": 230, \"time\": %llu, \"temperature\": %g, \"humidity\": %g}", (unsigned long long)time(NULL), temp, humidity);
-      temp += 1;
-      humidity -= 1;
+      sprintf(msg, "{\"device\": \"rpi2\", \"lat\": 59.95, \"lon\": 10.80, \"alt\": 230, \"time\": %llu, \"temperature\": %g, \"humidity\": %g}",
+	      read_time(), read_temperature(), read_humidity());
 
         /* This example publishes to only one topic and uses QOS1. */
         outgoingPublishPackets[ publishIndex ].pubInfo.qos = MQTTQoS1;
@@ -1602,7 +1630,6 @@ int main( int argc,
 #endif
 #endif
   /* FIXME: the file also has the port number */
-  /* FIXME: Really OS Name, Version, and Hardware should be computed? */
   AWS_IOT_ENDPOINT = must_lookup(&cfg, "AWS_IOT_ENDPOINT");
   ROOT_CA_CERT_PATH = must_lookup(&cfg, "ROOT_CA_CERT_PATH");
   CLIENT_CERT_PATH = must_lookup(&cfg, "CLIENT_CERT_PATH");
@@ -1612,6 +1639,14 @@ int main( int argc,
   OS_VERSION = must_lookup(&cfg, "OS_VERSION");
   HARDWARE_PLATFORM_NAME = must_lookup(&cfg, "HARDWARE_PLATFORM_NAME");
   MQTT_TOPIC = must_lookup(&cfg, "MQTT_TOPIC");
+  MAYBE_LAT = lookup_config(&cfg, "LAT");
+  MAYBE_LON = lookup_config(&cfg, "LON");
+  MAYBE_ALT = lookup_config(&cfg, "ALT");
+  MAYBE_LOC = lookup_config(&cfg, "LOC");
+  if (!!MAYBE_LAT != !!MAYBE_LON) {
+    fprintf(stderr, "Either both LAT and LON, or neither, in the config file\n");
+    abort();
+  }
 
     int returnStatus = EXIT_SUCCESS;
     MQTTContext_t mqttContext = { 0 };
