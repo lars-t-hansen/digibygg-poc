@@ -1,0 +1,3 @@
+This program is derived from the AWS embedded C IOT SDK,
+https://github.com/aws/aws-iot-device-sdk-embedded-C, version 202108.00.  It is
+a variant of the demos/mqtt/mqtt_demo_mutual_auth demo program.
