@@ -1,5 +1,21 @@
 /* Copyright 2022 KnowIt ObjectNet AS */
+/* Author Lars T Hansen */
 
+/* Format of the cfg file:
+ *
+ *   File ::= Line*
+ *   Line ::= Comment Eol | Blank Eol | Definition Eol
+ *   Eol ::= End of line or End of file
+ *   Comment ::= "#" Anything
+ *   Blank ::= Whitespace*
+ *   Definition ::= Variable"="Anything
+ *   Variable ::= [A-Z_][A-Z0-9_]*
+ *   Anything ::= .*
+ *   Whitespace ::= whatever isspace() says is a whitespace
+ *
+ * NOTE that in Definitions, whitespace is *significant* *everywhere*.
+ */
+     
 #include <stdio.h>
 
 struct config_node;

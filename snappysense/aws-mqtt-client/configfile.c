@@ -1,6 +1,8 @@
 /* Copyright 2022 KnowIt ObjectNet AS */
 /* Author: Lars T Hansen */
 
+/* Format of the cfg file is documented in configfile.h */
+
 #include <stdio.h>
 #include <assert.h>
 #include <ctype.h>
@@ -49,7 +51,9 @@ static int read_complete_line(FILE* f, char* buf, size_t bufsiz) {
     if (feof(f)) {
       return END_OF_FILE;
     }
+#ifndef NDEBUG
     fprintf(stderr, "Failed to read from config file\n");
+#endif
     return READ_ERROR;
   }
   /* Make sure we got a complete, terminated line.  Terminator can be newline or EOF */
@@ -59,8 +63,10 @@ static int read_complete_line(FILE* f, char* buf, size_t bufsiz) {
   }
   if (!*p) {
     if (!feof(f)) {
+#ifndef NDEBUG
       fprintf(stderr, "Failed to read a complete line from config file\n");
       fprintf(stderr, "%s\n", buf);
+#endif
       *buf = 0;
       return READ_ERROR;
     }
@@ -71,11 +77,21 @@ static int read_complete_line(FILE* f, char* buf, size_t bufsiz) {
   return GOT_LINE;
 }
 
+static int is_initial(char c) {
+  return (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+static int is_subsequent(char c) {
+  return is_initial(c) || (c >= '0' && c <= '9');
+}
+
 int read_configfile(const char* filename, config_file_t* cfg) {
   FILE* f = fopen(filename, "r");
   if (f == NULL) {
     cfg->valid = 0;
-    fprintf(stderr, "Failed to open config file\n");
+#ifndef NDEBUG
+    fprintf(stderr, "Failed to open config file '%s'\n", filename);
+#endif
     return 0;
   }
   char buf[1024];
@@ -113,14 +129,35 @@ int read_configfile(const char* filename, config_file_t* cfg) {
     }
     if (!*p) {
       /* no = sign */
+#ifndef NDEBUG
       fprintf(stderr, "Failed to find equal sign\n");
+#endif
       goto failure;
     }
-    /* TODO: Validate that the variable name uses only legal characters */
+    *p = 0;
     ptrdiff_t keylen = p - buf;
     if (keylen == 0) {
       /* no variable name */
+#ifndef NDEBUG
       fprintf(stderr, "Failed to find variable name\n");
+#endif
+      goto failure;
+    }
+    int failed = !is_initial(buf[0]);
+    if (!failed) {
+      char* q;
+      for (q = buf+1; q < p; q++) {
+	if (!is_subsequent(*q)) {
+	  failed = 1;
+	  break;
+	}
+      }
+    }
+    if (failed) {
+      /* bad variable name */
+#ifndef NDEBUG
+      fprintf(stderr, "Bad variable name '%s'\n", buf);
+#endif
       goto failure;
     }
     char* keybuf = malloc((size_t)keylen+1);
@@ -128,7 +165,6 @@ int read_configfile(const char* filename, config_file_t* cfg) {
       /* OOM */
       goto failure;
     }
-    *p = 0;
     strcpy(keybuf, buf);
     ptrdiff_t vallen = (buf + l) - (p + 1);
     char* valbuf = malloc((size_t)vallen+1);
