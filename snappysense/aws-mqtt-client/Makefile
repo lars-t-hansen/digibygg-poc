@@ -1,14 +1,17 @@
-# This is a pretty gross hack.
+# -*- fill-column: 128 -*-
 #
-# For this to work, you probably must have configured and built a demo
-# that builds the necessary libraries.  For sure, mqtt_demo_mutual_auth would work.
+# (This makefile is a pretty gross hack, with the extra .o files, but it works.)
+#
+# For this to work, you must have configured and built the libraries for the AWS IOT embedded C SDK.  Follow the steps in the
+# instructions for configuring, and then just type 'make' in the build/ directory.  (This builds the demos too; maybe there is
+# some narrower target just to build the libs.)
 
 .PHONY: all
 
 AWS=/home/pi/p/aws-iot-device-sdk-embedded-C
 STDLIB=$(AWS)/libraries/standard
 
-COMPILE=$(CC) -I$(STDLIB)/coreMQTT/source/include -I$(STDLIB)/coreMQTT/source/interface -I$(STDLIB)/backoffAlgorithm/source/include -I$(AWS)/demos/logging-stack -I$(AWS)/platform/posix/transport/include -I$(AWS)/platform/include -I. -O2 -c $<
+COMPILE=$(CC) -I$(STDLIB)/coreMQTT/source/include -I$(STDLIB)/coreMQTT/source/interface -I$(STDLIB)/coreJSON/source/include -I$(STDLIB)/backoffAlgorithm/source/include -I$(AWS)/demos/logging-stack -I$(AWS)/platform/posix/transport/include -I$(AWS)/platform/include -I. -O2 -c $<
 
 OBJECTS=mqtt-client.o configfile.o snappysense.o backoff_algorithm.o core_mqtt.o core_mqtt_state.o core_mqtt_serializer.o
 
@@ -21,7 +24,7 @@ clean:
 	rm -f *.o *~ snappysense
 
 snappysense: $(OBJECTS)
-	$(CC) -o snappysense $(OBJECTS) $(AWS)/build/lib/*.so 
+	$(CC) -o snappysense $(OBJECTS) -lm $(AWS)/build/lib/*.so 
 
 core_mqtt_state.o: $(STDLIB)/coreMQTT/source/core_mqtt_state.c
 	$(COMPILE)

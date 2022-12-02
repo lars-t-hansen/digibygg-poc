@@ -10,14 +10,19 @@
  */
 
 #include <assert.h>
+#include <ctype.h>
+#include <limits.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #include "configfile.h"
 #include "snappysense.h"
+#include "core_json.h"
 
 /* Readings sent from devices.  The device ID is encoded in the payload, for now. */
 static const char* DEVICE_READING_TOPIC = "snappy/device_reading";
@@ -38,13 +43,19 @@ static const char* MAYBE_LAT;
 static const char* MAYBE_LON;
 static const char* MAYBE_ALT;
 static const char* MAYBE_LOC;
-static const char* DEV_CLASS;
-static const char* DEV_ID;
+static const char* DEVICE_CLASS;
+static const char* DEVICE_ID;
 
 /* TODO: Read these from config file, optionally */
 static int DEVICE_ENABLED = 1;
 static time_t DEVICE_MIN_SECONDS_BETWEEN_REPORTS = 5;
 static time_t DEVICE_MAX_SECONDS_BETWEEN_REPORTS = 5*60;
+
+static int safe_json_string(const char* p);
+static int safe_json_number(const char* p);
+static int emit(char** bufp, size_t* availp, const char* fmt, ...);
+static int read_temperature();
+static int read_humidity();
 
 /* Since this is a toy, let's say we want to allow reconfiguring the reading
  * intervals, and to completely disable readings.  We use the same config
@@ -57,14 +68,79 @@ static time_t DEVICE_MAX_SECONDS_BETWEEN_REPORTS = 5*60;
  */
 
 static void config(const char* topic, uint8_t* payload, size_t payloadLen) {
-  /* TODO */
+  JSONPair_t pair = { 0 };
+  JSONStatus_t result;
+  size_t start = 0, next = 0;
+  result = JSON_Validate((const char*)payload, payloadLen);
+  if (result == JSONSuccess) {
+    for (;;) {
+      result = JSON_Iterate((const char*)payload, payloadLen, &start, &next, &pair);
+      if (result != JSONSuccess) {
+	break;
+      }
+      if (pair.jsonType == JSONNumber) {
+	char tmp[128];
+	if (pair.valueLength >= sizeof(tmp) || pair.keyLength >= sizeof(tmp)) {
+	  continue;
+	}
+	memcpy(tmp, pair.value, pair.valueLength);
+	tmp[pair.valueLength] = 0;
+	if (!safe_json_number(tmp)) {
+	  continue;
+	}
+	double v = strtod(tmp, NULL);
+	if (v < 0 || floor(v) != v || v > INT_MAX) {
+	  continue;
+	}
+	int val = (int)v;
+	memcpy(tmp, pair.key, pair.keyLength);
+	tmp[pair.keyLength] = 0;
+	if (strcmp(tmp, "enable") == 0) {
+	  DEVICE_ENABLED = (val != 0);
+	} else if (strcmp(tmp, "min_interval_between_reports") == 0) {
+	  if (val > 0) {
+	    DEVICE_MIN_SECONDS_BETWEEN_REPORTS = val;
+	  }
+	} else if (strcmp(tmp, "max_interval_between_reports") == 0) {
+	  if (val > 0) {
+	    DEVICE_MAX_SECONDS_BETWEEN_REPORTS = val;
+	  }
+	}
+      }
+    }
+  }
 }
 
 int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t *nSubscriptions) {
   MAYBE_LAT = lookup_config(cfg, "LAT");
+  if (!safe_json_number(MAYBE_LAT)) {
+    return 0;
+  }
   MAYBE_LON = lookup_config(cfg, "LON");
+  if (!safe_json_number(MAYBE_LAT)) {
+    return 0;
+  }
   MAYBE_ALT = lookup_config(cfg, "ALT");
+  if (!safe_json_number(MAYBE_ALT)) {
+    return 0;
+  }
   MAYBE_LOC = lookup_config(cfg, "LOC");
+  if (!safe_json_string(MAYBE_LOC)) {
+#ifndef NDEBUG
+    fprintf(stderr, "Illegal character in LOC string");
+#endif
+    return 0;
+  }
+  DEVICE_CLASS = lookup_config(cfg, "DEVICE_CLASS");
+  if (!safe_json_string(DEVICE_CLASS)) {
+    return 0;
+  }
+  DEVICE_ID = lookup_config(cfg, "DEVICE_ID");
+  if (!safe_json_string(DEVICE_ID)) {
+    return 0;
+  }
+
+  /* Either LAT and LON, or neither and LOC */
   if (!!MAYBE_LAT != !!MAYBE_LON) {
 #ifndef NDEBUG
     fprintf(stderr, "Need both LATitude and LONgitude, or neither");
@@ -75,27 +151,27 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
 #ifndef NDEBUG
     fprintf(stderr, "Need both LATitude and LONgitude, or LOCation");
 #endif
-    /* TODO: Sanitize that string for JSON.  No double quotes, no control chars. */
     return 0;
   }
-  DEV_CLASS = lookup_config(cfg, "DEVICE_CLASS");
-  DEV_ID = lookup_config(cfg, "DEVICE_ID");
-  if (DEV_CLASS == NULL || DEV_ID == NULL) {
+
+  /* All device characteristics */
+  if (DEVICE_CLASS == NULL || DEVICE_ID == NULL) {
 #ifndef NDEBUG
-    fprintf(stderr, "Need both DEVICE_CLASS and DEVICE_ID");
+    fprintf(stderr, "Need valid DEVICE_CLASS and DEVICE_ID");
 #endif
     return 0;
   }
+
   char all_devices[256];
   char my_class[256];
   char my_device[256];
   if (snprintf(all_devices, sizeof(all_devices), DEVICE_CONFIG_TOPIC, "all") >= sizeof(all_devices)) {
     return 0;
   }
-  if (snprintf(my_class, sizeof(my_class), DEVICE_CONFIG_TOPIC, DEV_CLASS) >= sizeof(my_class)) {
+  if (snprintf(my_class, sizeof(my_class), DEVICE_CONFIG_TOPIC, DEVICE_CLASS) >= sizeof(my_class)) {
     return 0;
   }
-  if (snprintf(my_device, sizeof(my_device), DEVICE_CONFIG_TOPIC, DEV_ID) >= sizeof(my_device)) {
+  if (snprintf(my_device, sizeof(my_device), DEVICE_CONFIG_TOPIC, DEVICE_ID) >= sizeof(my_device)) {
     return 0;
   }
   static subscription_t subs[3];
@@ -107,34 +183,6 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
   subs[2].callback = config;
   *subscriptions = subs;
   *nSubscriptions = 3;
-  return 1;
-}
-
-static int read_temperature() {
-  /* TODO: Read an actual sensor */
-  static int temp = 1;
-  int t = temp;
-  temp += 1;
-  return t;
-}
-
-static int read_humidity() {
-  /* TODO: Read an actual sensor */
-  static int hum = 100;
-  int h = hum;
-  hum -= 1;
-  return h;
-}
-
-static int emit(char** bufp, size_t* availp, const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  size_t k;
-  if ((k = vsnprintf(*bufp, *availp, fmt, args)) >= *availp) {
-    return 0;
-  }
-  *bufp += k;
-  *availp -= k;
   return 1;
 }
 
@@ -198,3 +246,72 @@ int snappysense_get_message(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
   last_humidity = hum;
   return 1;
 }
+
+/* String manipulation */
+
+static int safe_json_string(const char* p) {
+  if (p == NULL) {
+    return 1;
+  }
+  for (; *p != 0 ; p++ ) {
+    if (*p == '"' || *p < ' ' || *p > '~') {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int safe_json_number(const char* p) {
+  if (p == NULL) {
+    return 1;
+  }
+  const char* start = p;
+  while (*p && isdigit(*p)) {
+    p++;
+  }
+  if (p == start) {
+    return 0;
+  }
+  if (*p == '.') {
+    p++;
+    start = p;
+    while (*p && isdigit(*p)) {
+      p++;
+    }
+    if (p == start) {
+      return 0;
+    }
+  }
+  return *p == 0;
+}
+
+static int emit(char** bufp, size_t* availp, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  size_t k;
+  if ((k = vsnprintf(*bufp, *availp, fmt, args)) >= *availp) {
+    return 0;
+  }
+  *bufp += k;
+  *availp -= k;
+  return 1;
+}
+
+/* Sensor readings */
+
+static int read_temperature() {
+  /* TODO: Read an actual sensor */
+  static int temp = 1;
+  int t = temp;
+  temp += 1;
+  return t;
+}
+
+static int read_humidity() {
+  /* TODO: Read an actual sensor */
+  static int hum = 100;
+  int h = hum;
+  hum -= 1;
+  return h;
+}
+
