@@ -41,6 +41,7 @@ static const char* MAYBE_LOC;
 static const char* DEV_CLASS;
 static const char* DEV_ID;
 
+/* TODO: Read these from config file, optionally */
 static int DEVICE_ENABLED = 1;
 static time_t DEVICE_MIN_SECONDS_BETWEEN_REPORTS = 5;
 static time_t DEVICE_MAX_SECONDS_BETWEEN_REPORTS = 5*60;
