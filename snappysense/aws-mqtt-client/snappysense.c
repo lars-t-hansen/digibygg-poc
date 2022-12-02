@@ -63,8 +63,8 @@ static int read_humidity();
  *
  * JSON properties:
  *  "enable": <nonnegative integer, 0 or not-0>
- *  "min_interval_between_reports": <nonnegative integer, represents seconds>
- *  "max_interval_between_reports": <nonnegative integer, represents seconds>
+ *  "min_interval_between_reports": <positive integer, represents seconds>
+ *  "max_interval_between_reports": <positive integer, represents seconds>
  */
 
 static void config(const char* topic, uint8_t* payload, size_t payloadLen) {
@@ -81,15 +81,18 @@ static void config(const char* topic, uint8_t* payload, size_t payloadLen) {
       if (pair.jsonType == JSONNumber) {
 	char tmp[128];
 	if (pair.valueLength >= sizeof(tmp) || pair.keyLength >= sizeof(tmp)) {
+	  /* TODO: Log */
 	  continue;
 	}
 	memcpy(tmp, pair.value, pair.valueLength);
 	tmp[pair.valueLength] = 0;
 	if (!safe_json_number(tmp)) {
+	  /* TODO: Log */
 	  continue;
 	}
 	double v = strtod(tmp, NULL);
 	if (v < 0 || floor(v) != v || v > INT_MAX) {
+	  /* TODO: Log */
 	  continue;
 	}
 	int val = (int)v;
@@ -101,11 +104,14 @@ static void config(const char* topic, uint8_t* payload, size_t payloadLen) {
 	  if (val > 0) {
 	    DEVICE_MIN_SECONDS_BETWEEN_REPORTS = val;
 	  }
+	  /* TODO: Otherwise log */
 	} else if (strcmp(tmp, "max_interval_between_reports") == 0) {
 	  if (val > 0) {
 	    DEVICE_MAX_SECONDS_BETWEEN_REPORTS = val;
 	  }
+	  /* TODO: Otherwise log */
 	}
+	/* TODO: Otherwise log */
       }
     }
   }
