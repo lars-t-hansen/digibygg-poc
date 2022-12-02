@@ -7,9 +7,6 @@
 
 *.pem
 
-*~
-*.o
-
 cloud/image/
 
 build/
