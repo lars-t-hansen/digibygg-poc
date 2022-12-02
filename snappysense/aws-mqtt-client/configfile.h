@@ -28,6 +28,10 @@ typedef struct config_file {
 /** 
  * Init the config before reading into it; makes it `valid`.  Do not call this
  * on a config that has data.
+ *
+ * NOTE: Currently this used dynamic memory allocation and there can be multiple
+ * config files live at the same time.  destroy_configfile() is required to properly
+ * clean up.
  */
 void init_configfile(config_file_t* cfg);
 
