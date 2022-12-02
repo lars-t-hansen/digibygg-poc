@@ -16,7 +16,12 @@
  * NOTE that in Definitions, whitespace is *significant* *everywhere*.
  */
      
+#ifndef configfile_h_included
+#define configfile_h_included
+
+#ifndef NDEBUG
 #include <stdio.h>
+#endif
 
 struct config_node;
 
@@ -60,3 +65,5 @@ const char* lookup_config(const config_file_t* cfg, const char* key);
  */
 void dump_config(const config_file_t* cfg, FILE* out);
 #endif
+
+#endif /* ifndef configfile_h_included */

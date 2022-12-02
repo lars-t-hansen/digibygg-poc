@@ -1,3 +1,4 @@
+/* -*- c-basic-offset: 4 -*- */
 /*
  * AWS IoT Device SDK for Embedded C 202108.00
  * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
@@ -77,6 +78,7 @@
 #include "logging_stack.h"
 
 #include "configfile.h"
+#include "snappysense.h"
 
 /**
  * @brief Details of the MQTT broker to connect to.
@@ -84,7 +86,7 @@
  * @note Your AWS IoT Core endpoint can be found in the AWS IoT console under
  * Settings/Custom Endpoint, or using the describe-endpoint API.
  */
-const char* AWS_IOT_ENDPOINT;
+static const char* AWS_IOT_ENDPOINT;
 
 /**
  * @brief AWS IoT MQTT broker port number.
@@ -109,7 +111,7 @@ const char* AWS_IOT_ENDPOINT;
  * @note This path is relative from the demo binary created. Update
  * ROOT_CA_CERT_PATH to the absolute path if this demo is executed from elsewhere.
  */
-const char* ROOT_CA_CERT_PATH;
+static const char* ROOT_CA_CERT_PATH;
 
 /**
  * @brief Path of the file containing the client certificate.
@@ -120,7 +122,7 @@ const char* ROOT_CA_CERT_PATH;
  *
  * @note This certificate should be PEM-encoded.
  */
-const char* CLIENT_CERT_PATH;
+static const char* CLIENT_CERT_PATH;
 
 /**
  * @brief Path of the file containing the client's private key.
@@ -131,14 +133,14 @@ const char* CLIENT_CERT_PATH;
  *
  * @note This private key should be PEM-encoded.
  */
-const char* CLIENT_PRIVATE_KEY_PATH;
+static const char* CLIENT_PRIVATE_KEY_PATH;
 
 /**
  * @brief MQTT client identifier.
  *
  * No two clients may use the same client identifier simultaneously.
  */
-const char* CLIENT_IDENTIFIER;
+static const char* CLIENT_IDENTIFIER;
 
 /**
  * @brief Size of the network buffer for MQTT packets.
@@ -150,31 +152,21 @@ const char* CLIENT_IDENTIFIER;
  * The current value is given as an example. Please update for your specific
  * operating system.
  */
-const char* OS_NAME;
+static const char* OS_NAME;
 
 /**
  * @brief The version of the operating system that the application is running
  * on. The current value is given as an example. Please update for your specific
  * operating system version.
  */
-const char* OS_VERSION;
+static const char* OS_VERSION;
 
 /**
  * @brief The name of the hardware platform the application is running on. The
  * current value is given as an example. Please update for your specific
  * hardware platform.
  */
-const char* HARDWARE_PLATFORM_NAME;
-
-/**
- * Location strings.  If LAT or LON is present the other one should be, and in that
- * case they are used, and ALT is reported if present.  If neither LAT or LON is present
- * then there should be a LOC string.
- */
-const char* MAYBE_LAT;
-const char* MAYBE_LON;
-const char* MAYBE_ALT;
-const char* MAYBE_LOC;
+static const char* HARDWARE_PLATFORM_NAME;
 
 /**
  * @brief The name of the MQTT library used and its version, following an "@"
@@ -201,14 +193,6 @@ const char* MAYBE_LOC;
  * @brief Timeout for receiving CONNACK packet in milli seconds.
  */
 #define CONNACK_RECV_TIMEOUT_MS                  ( 1000U )
-
-/**
- * @brief The topic to subscribe and publish to in the example.
- *
- * The topic name starts with the client identifier to ensure that each demo
- * interacts with a unique topic name.
- */
-const char* MQTT_TOPIC;
 
 /**
  * @brief Maximum number of outgoing publishes maintained in the application
@@ -500,7 +484,7 @@ static int unsubscribeFromTopic( MQTTContext_t * pMqttContext );
  * @return EXIT_SUCCESS if PUBLISH was successfully sent;
  * EXIT_FAILURE otherwise.
  */
-static int publishToTopic( MQTTContext_t * pMqttContext );
+static int publishToTopic( MQTTContext_t * pMqttContext, const char* topic, const uint8_t* payload, size_t payloadLen );
 
 /**
  * @brief Function to get the free index at which an outgoing publish
@@ -1251,25 +1235,7 @@ static int unsubscribeFromTopic( MQTTContext_t * pMqttContext )
 
 /*-----------------------------------------------------------*/
 
-double read_temperature() {
-  static double temp = 1;
-  double t = temp;
-  temp += 1;
-  return t;
-}
-
-double read_humidity() {
-  static double hum = 100;
-  double h = hum;
-  hum += 1;
-  return h;
-}
-
-unsigned long long read_time() {
-  return (unsigned long long)time(NULL);
-}
-
-static int publishToTopic( MQTTContext_t * pMqttContext )
+static int publishToTopic( MQTTContext_t * pMqttContext, const char* topic, const uint8_t* payload, size_t payloadLen )
 {
     int returnStatus = EXIT_SUCCESS;
     MQTTStatus_t mqttStatus = MQTTSuccess;
@@ -1289,19 +1255,12 @@ static int publishToTopic( MQTTContext_t * pMqttContext )
     }
     else
     {
-      /* FIXME: Deal with overflow */
-      /* FIXME: The location and device ID should be read from a config file,
-	 indeed the device ID is probably the same as the CLIENT_IDENTIFIER? */
-      char msg[1024];
-      sprintf(msg, "{\"device\": \"rpi2\", \"lat\": 59.95, \"lon\": 10.80, \"alt\": 230, \"time\": %llu, \"temperature\": %g, \"humidity\": %g}",
-	      read_time(), read_temperature(), read_humidity());
-
         /* This example publishes to only one topic and uses QOS1. */
         outgoingPublishPackets[ publishIndex ].pubInfo.qos = MQTTQoS1;
-        outgoingPublishPackets[ publishIndex ].pubInfo.pTopicName = MQTT_TOPIC;
-        outgoingPublishPackets[ publishIndex ].pubInfo.topicNameLength = strlen(MQTT_TOPIC);
-        outgoingPublishPackets[ publishIndex ].pubInfo.pPayload = msg;
-        outgoingPublishPackets[ publishIndex ].pubInfo.payloadLength = strlen(msg);
+        outgoingPublishPackets[ publishIndex ].pubInfo.pTopicName = topic;
+        outgoingPublishPackets[ publishIndex ].pubInfo.topicNameLength = strlen(topic);
+        outgoingPublishPackets[ publishIndex ].pubInfo.pPayload = payload;
+        outgoingPublishPackets[ publishIndex ].pubInfo.payloadLength = payloadLen;
 
         /* Get a new packet id. */
         outgoingPublishPackets[ publishIndex ].packetId = MQTT_GetPacketId( pMqttContext );
@@ -1321,8 +1280,8 @@ static int publishToTopic( MQTTContext_t * pMqttContext )
         else
         {
             LogInfo( ( "PUBLISH sent for topic %.*s to broker with packet ID %u.\n\n",
-                       strlen(MQTT_TOPIC),
-                       MQTT_TOPIC,
+                       strlen(topic),
+                       topic,
                        outgoingPublishPackets[ publishIndex ].packetId ) );
         }
     }
@@ -1445,10 +1404,16 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext )
          * send keep alive messages. */
         for( publishCount = 0; publishCount < maxPublishCount; publishCount++ )
         {
+	    char topic[1024];
+	    uint8_t payload[1024];
+	    size_t payloadLen;
+	    if (!snappysense_get_message(topic, sizeof(topic), payload, sizeof(payload), &payloadLen)) {
+		continue;
+	    }
             LogInfo( ( "Sending Publish to the MQTT topic %.*s.",
-                       strlen(MQTT_TOPIC),
-                       MQTT_TOPIC ) );
-            returnStatus = publishToTopic( pMqttContext );
+                       strlen(topic),
+                       topic ) );
+            returnStatus = publishToTopic( pMqttContext, topic, payload, payloadLen );
 
             /* Calling MQTT_ProcessLoop to process incoming publish echo, since
              * application subscribed to the same topic the broker will send
@@ -1594,12 +1559,12 @@ static MQTTStatus_t processLoopWithTimeout( MQTTContext_t * pMqttContext,
 /*-----------------------------------------------------------*/
 
 const char* must_lookup(config_file_t* cfg, const char *name) {
-  const char* v = lookup_config(cfg, name);
-  if (!v) {
-    fprintf(stderr, "Variable %s missing\n", name);
-    abort();
-  }
-  return v;
+    const char* v = lookup_config(cfg, name);
+    if (!v) {
+	fprintf(stderr, "Variable %s missing\n", name);
+	abort();
+    }
+    return v;
 }
 
 /**
@@ -1619,34 +1584,31 @@ const char* must_lookup(config_file_t* cfg, const char *name) {
 int main( int argc,
           char ** argv )
 {
-  config_file_t cfg;
-  init_configfile(&cfg);
-  if (!read_configfile("snappysense.cfg", &cfg)) {
-    abort();
-  }
+    config_file_t cfg;
+    init_configfile(&cfg);
+    if (!read_configfile("snappysense.cfg", &cfg)) {
+	abort();
+    }
 #if 0
 #ifndef NDEBUG
-  dump_config(&cfg, stdout);
+    dump_config(&cfg, stdout);
 #endif
 #endif
-  /* FIXME: the file also has the port number */
-  AWS_IOT_ENDPOINT = must_lookup(&cfg, "AWS_IOT_ENDPOINT");
-  ROOT_CA_CERT_PATH = must_lookup(&cfg, "ROOT_CA_CERT_PATH");
-  CLIENT_CERT_PATH = must_lookup(&cfg, "CLIENT_CERT_PATH");
-  CLIENT_PRIVATE_KEY_PATH = must_lookup(&cfg, "CLIENT_PRIVATE_KEY_PATH");
-  CLIENT_IDENTIFIER = must_lookup(&cfg, "CLIENT_IDENTIFIER");
-  OS_NAME = must_lookup(&cfg, "OS_NAME");
-  OS_VERSION = must_lookup(&cfg, "OS_VERSION");
-  HARDWARE_PLATFORM_NAME = must_lookup(&cfg, "HARDWARE_PLATFORM_NAME");
-  MQTT_TOPIC = must_lookup(&cfg, "MQTT_TOPIC");
-  MAYBE_LAT = lookup_config(&cfg, "LAT");
-  MAYBE_LON = lookup_config(&cfg, "LON");
-  MAYBE_ALT = lookup_config(&cfg, "ALT");
-  MAYBE_LOC = lookup_config(&cfg, "LOC");
-  if (!!MAYBE_LAT != !!MAYBE_LON) {
-    fprintf(stderr, "Either both LAT and LON, or neither, in the config file\n");
-    abort();
-  }
+    /* FIXME: the file also has the port number */
+    /* FIXME: the file also has the polling interval */
+    AWS_IOT_ENDPOINT = must_lookup(&cfg, "AWS_IOT_ENDPOINT");
+    ROOT_CA_CERT_PATH = must_lookup(&cfg, "ROOT_CA_CERT_PATH");
+    CLIENT_CERT_PATH = must_lookup(&cfg, "CLIENT_CERT_PATH");
+    CLIENT_PRIVATE_KEY_PATH = must_lookup(&cfg, "CLIENT_PRIVATE_KEY_PATH");
+    CLIENT_IDENTIFIER = must_lookup(&cfg, "CLIENT_IDENTIFIER");
+    OS_NAME = must_lookup(&cfg, "OS_NAME");
+    OS_VERSION = must_lookup(&cfg, "OS_VERSION");
+    HARDWARE_PLATFORM_NAME = must_lookup(&cfg, "HARDWARE_PLATFORM_NAME");
+
+    /* TODO: Do something with subscriptions */
+    size_t n_subscriptions = 0;
+    subscription_t *subscriptions = NULL;
+    snappysense_init(&cfg, &subscriptions, &n_subscriptions);
 
     int returnStatus = EXIT_SUCCESS;
     MQTTContext_t mqttContext = { 0 };
@@ -1672,6 +1634,16 @@ int main( int argc,
     /* Initialize MQTT library. Initialization of the MQTT library needs to be
      * done only once in this demo. */
     returnStatus = initializeMqtt( &mqttContext, &networkContext );
+
+    /* FIXME: The following logic may not be quite what we want, we
+       probably want to keep the connection alive?  It depends on the
+       reporting interval perhaps.  If it's infrequent (every few
+       minutes, hours) then for sure set up and tear down the connection
+       when it's needed, and indeed if there are no subscribed topics
+       then only set it up if there is any outgoing traffic.
+       
+       It could also be that we check for incoming traffic only very
+       rarely, and that this should be controlled separately. */
 
     if( returnStatus == EXIT_SUCCESS )
     {
