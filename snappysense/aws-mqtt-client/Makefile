@@ -3,15 +3,22 @@
 # For this to work, you probably must have configured and built a demo
 # that builds the necessary libraries.  For sure, mqtt_demo_mutual_auth would work.
 
+.PHONY: all
+
 AWS=/home/pi/p/aws-iot-device-sdk-embedded-C
 STDLIB=$(AWS)/libraries/standard
 
 COMPILE=$(CC) -I$(STDLIB)/coreMQTT/source/include -I$(STDLIB)/coreMQTT/source/interface -I$(STDLIB)/backoffAlgorithm/source/include -I$(AWS)/demos/logging-stack -I$(AWS)/platform/posix/transport/include -I$(AWS)/platform/include -I. -O2 -c $<
 
-OBJECTS=snappysense.o configfile.o backoff_algorithm.o core_mqtt.o core_mqtt_state.o core_mqtt_serializer.o
+OBJECTS=mqtt-client.o configfile.o backoff_algorithm.o core_mqtt.o core_mqtt_state.o core_mqtt_serializer.o
 
 .c.o:
 	$(COMPILE)
+
+all: snappysense
+
+clean:
+	rm -f *.o *~ snappysense
 
 snappysense: $(OBJECTS)
 	$(CC) -o snappysense $(OBJECTS) $(AWS)/build/lib/*.so 
