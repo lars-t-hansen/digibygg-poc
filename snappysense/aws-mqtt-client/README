@@ -1,3 +1,10 @@
 This program is derived from the AWS embedded C IOT SDK,
-https://github.com/aws/aws-iot-device-sdk-embedded-C, version 202108.00.  It is
-a variant of the demos/mqtt/mqtt_demo_mutual_auth demo program.
+https://github.com/aws/aws-iot-device-sdk-embedded-C, version 202108.00.  It is a variant of the
+demos/mqtt/mqtt_demo_mutual_auth demo program.
+
+See Makefile for information about how to build.
+
+To run, the libraries built by the build process must be in a suitable path, I usually do
+
+   LD_LIBRARY_PATH=~/p/aws-iot-device-sdk-embedded-C/build/lib ./snappysense
+

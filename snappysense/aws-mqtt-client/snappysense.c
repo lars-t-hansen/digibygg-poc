@@ -78,7 +78,6 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
 
 #define SIZE 256
 
-#if 0
   static char control_all_devices[SIZE];
   static char control_my_class[SIZE];
   static char control_my_device[SIZE];
@@ -106,7 +105,7 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
   subs[3].callback = command_callback;
   *subscriptions = subs;
   *nSubscriptions = 4;
-#endif
+
 #undef SIZE
 
   configure_sensors();
@@ -192,7 +191,7 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
  *    { enable: <integer>, reading_interval: <integer> }
  */
 static void control_callback(const char* topic, const uint8_t* payload, size_t payloadLen) {
-  fprintf(stderr, "Received control message: %*.s\n", payloadLen, payload);
+  fprintf(stderr, "Received control message: %.*s\n", (int)payloadLen, (const char*)payload);
   JSONPair_t pair = { 0 };
   JSONStatus_t result;
   size_t start = 0, next = 0;
@@ -224,7 +223,7 @@ static void control_callback(const char* topic, const uint8_t* payload, size_t p
  *   "humidity"
  */
 static void command_callback(const char* topic, const uint8_t* payload, size_t payloadLen) {
-  fprintf(stderr, "Received command message: %*.s\n", payloadLen, payload);
+  fprintf(stderr, "Received command message: %.*s\n", (int)payloadLen, (const char*)payload);
   JSONPair_t pair = { 0 };
   JSONStatus_t result;
   size_t start = 0, next = 0;

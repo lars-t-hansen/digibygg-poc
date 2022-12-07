@@ -1,10 +1,11 @@
-# -*- fill-column: 128 -*-
+# -*- fill-column: 100 -*-
 #
 # (This makefile is a pretty gross hack, with the extra .o files, but it works.)
 #
-# For this to work, you must have configured and built the libraries for the AWS IOT embedded C SDK.  Follow the steps in the
-# instructions for configuring, and then just type 'make' in the build/ directory.  (This builds the demos too; maybe there is
-# some narrower target just to build the libs.)
+# For this to work, you must have configured and built the libraries for the AWS IOT embedded C SDK.
+# Follow the steps in the instructions for configuring, and then just type 'make' in the build/
+# directory.  (This builds the demos too; maybe there is some narrower target just to build the
+# libs.)
 
 .PHONY: all
 
