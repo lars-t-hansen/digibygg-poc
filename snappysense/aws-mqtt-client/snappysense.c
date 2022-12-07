@@ -24,139 +24,47 @@
 #include "snappysense.h"
 #include "core_json.h"
 
-/* Readings sent from devices.  The device ID is encoded in the payload, for now. */
-static const char* DEVICE_READING_TOPIC = "snappy/device_reading";
+/* Device -> broker.  Parameters are device_class, device_id. */
+static const char* const snappy_startup_fmt = "snappy/startup/%s/%s";
 
-/* Here the last segment can be either "all", a device class, or a device ID.
- * These are always sent with QoS1; those messages persist on the server until
- * they are replaced, which is exactly what we want.  The client must be aware
- * that they may receive duplicates.
- *
- * A client subscribes with "all", its own device class, and its own device ID.
- */
-static const char* DEVICE_CONFIG_TOPIC = "snappy/device_config/%s";
+/* Device -> broker.  Parameters are device_class, device_id. */
+static const char* const snappy_reading_fmt = "snappy/reading/%s/%s";
 
-/* Location strings.  If LAT or LON is present the other one should be, and in that
-   case they are used, and ALT is reported if present.  If neither LAT or LON is present
-   then there should be a LOC string. */
-static const char* MAYBE_LAT;
-static const char* MAYBE_LON;
-static const char* MAYBE_ALT;
-static const char* MAYBE_LOC;
+/* Broker -> device.  Parameter is device_class, device_id, or "all". */
+static const char* const snappy_control_fmt = "snappy/control/%s";
+
+/* Broker -> device.  Parameter is device_id. */
+static const char* const snappy_command_fmt = "snappy/command/%s";
+
 static const char* DEVICE_CLASS;
 static const char* DEVICE_ID;
 
-/* TODO: Read these from config file, optionally */
+/* Runtime configuration.  Could be read from config file (but is currently
+ * not); can be configured by server.
+ */
 static int DEVICE_ENABLED = 1;
-static time_t DEVICE_MIN_SECONDS_BETWEEN_REPORTS = 5;
-static time_t DEVICE_MAX_SECONDS_BETWEEN_REPORTS = 5*60;
+static time_t READING_INTERVAL = 5; /* Seconds */
+
+/* Fixed maximum reporting interval even if no new sensor values. */
+static time_t CALL_HOME_INTERVAL = 5*60; /* Seconds */
 
 static int safe_json_string(const char* p);
 static int safe_json_number(const char* p);
 static int emit(char** bufp, size_t* availp, const char* fmt, ...);
-static int read_temperature();
-static int read_humidity();
 
-/* Since this is a toy, let's say we want to allow reconfiguring the reading
- * intervals, and to completely disable readings.  We use the same config
- * procedure for all cases.
- *
- * JSON properties:
- *  "enable": <nonnegative integer, 0 or not-0>
- *  "min_interval_between_reports": <positive integer, represents seconds>
- *  "max_interval_between_reports": <positive integer, represents seconds>
- */
+static void control_callback(const char* topic, const uint8_t* payload, size_t payloadLen);
+static void command_callback(const char* topic, const uint8_t* payload, size_t payloadLen);
 
-static void config(const char* topic, uint8_t* payload, size_t payloadLen) {
-  JSONPair_t pair = { 0 };
-  JSONStatus_t result;
-  size_t start = 0, next = 0;
-  result = JSON_Validate((const char*)payload, payloadLen);
-  if (result == JSONSuccess) {
-    for (;;) {
-      result = JSON_Iterate((const char*)payload, payloadLen, &start, &next, &pair);
-      if (result != JSONSuccess) {
-	break;
-      }
-      if (pair.jsonType == JSONNumber) {
-	char tmp[128];
-	if (pair.valueLength >= sizeof(tmp) || pair.keyLength >= sizeof(tmp)) {
-	  /* TODO: Log */
-	  continue;
-	}
-	memcpy(tmp, pair.value, pair.valueLength);
-	tmp[pair.valueLength] = 0;
-	if (!safe_json_number(tmp)) {
-	  /* TODO: Log */
-	  continue;
-	}
-	double v = strtod(tmp, NULL);
-	if (v < 0 || floor(v) != v || v > INT_MAX) {
-	  /* TODO: Log */
-	  continue;
-	}
-	int val = (int)v;
-	memcpy(tmp, pair.key, pair.keyLength);
-	tmp[pair.keyLength] = 0;
-	if (strcmp(tmp, "enable") == 0) {
-	  DEVICE_ENABLED = (val != 0);
-	} else if (strcmp(tmp, "min_interval_between_reports") == 0) {
-	  if (val > 0) {
-	    DEVICE_MIN_SECONDS_BETWEEN_REPORTS = val;
-	  }
-	  /* TODO: Otherwise log */
-	} else if (strcmp(tmp, "max_interval_between_reports") == 0) {
-	  if (val > 0) {
-	    DEVICE_MAX_SECONDS_BETWEEN_REPORTS = val;
-	  }
-	  /* TODO: Otherwise log */
-	}
-	/* TODO: Otherwise log */
-      }
-    }
-  }
-}
+static int get_json_integer(JSONPair_t* pair, const char* key, int* val);
+static int get_json_string(JSONPair_t* pair, const char* key, char* buf, size_t bufsiz);
 
 int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t *nSubscriptions) {
-  MAYBE_LAT = lookup_config(cfg, "LAT");
-  if (!safe_json_number(MAYBE_LAT)) {
-    return 0;
-  }
-  MAYBE_LON = lookup_config(cfg, "LON");
-  if (!safe_json_number(MAYBE_LAT)) {
-    return 0;
-  }
-  MAYBE_ALT = lookup_config(cfg, "ALT");
-  if (!safe_json_number(MAYBE_ALT)) {
-    return 0;
-  }
-  MAYBE_LOC = lookup_config(cfg, "LOC");
-  if (!safe_json_string(MAYBE_LOC)) {
-#ifndef NDEBUG
-    fprintf(stderr, "Illegal character in LOC string");
-#endif
-    return 0;
-  }
   DEVICE_CLASS = lookup_config(cfg, "DEVICE_CLASS");
   if (!safe_json_string(DEVICE_CLASS)) {
     return 0;
   }
   DEVICE_ID = lookup_config(cfg, "DEVICE_ID");
   if (!safe_json_string(DEVICE_ID)) {
-    return 0;
-  }
-
-  /* Either LAT and LON, or neither and LOC */
-  if (!!MAYBE_LAT != !!MAYBE_LON) {
-#ifndef NDEBUG
-    fprintf(stderr, "Need both LATitude and LONgitude, or neither");
-#endif
-    return 0;
-  }
-  if (MAYBE_LOC == NULL && MAYBE_LAT == NULL) {
-#ifndef NDEBUG
-    fprintf(stderr, "Need both LATitude and LONgitude, or LOCation");
-#endif
     return 0;
   }
 
@@ -168,31 +76,59 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
     return 0;
   }
 
-  char all_devices[256];
-  char my_class[256];
-  char my_device[256];
-  if (snprintf(all_devices, sizeof(all_devices), DEVICE_CONFIG_TOPIC, "all") >= sizeof(all_devices)) {
+#define SIZE 256
+
+  static char control_all_devices[SIZE];
+  static char control_my_class[SIZE];
+  static char control_my_device[SIZE];
+  static char command_my_device[SIZE];
+  static subscription_t subs[4];
+  if (snprintf(control_all_devices, SIZE, snappy_control_fmt, "all") >= SIZE) {
     return 0;
   }
-  if (snprintf(my_class, sizeof(my_class), DEVICE_CONFIG_TOPIC, DEVICE_CLASS) >= sizeof(my_class)) {
+  if (snprintf(control_my_class, SIZE, snappy_control_fmt, DEVICE_CLASS) >= SIZE) {
     return 0;
   }
-  if (snprintf(my_device, sizeof(my_device), DEVICE_CONFIG_TOPIC, DEVICE_ID) >= sizeof(my_device)) {
+  if (snprintf(control_my_device, SIZE, snappy_control_fmt, DEVICE_ID) >= SIZE) {
     return 0;
   }
-  static subscription_t subs[3];
-  subs[0].topic = all_devices;
-  subs[0].callback = config;
-  subs[1].topic = my_class;
-  subs[1].callback = config;
-  subs[2].topic = my_device;
-  subs[2].callback = config;
+  if (snprintf(command_my_device, SIZE, snappy_command_fmt, DEVICE_ID) >= SIZE) {
+    return 0;
+  }
+  subs[0].topic = control_all_devices;
+  subs[0].callback = control_callback;
+  subs[1].topic = control_my_class;
+  subs[1].callback = control_callback;
+  subs[2].topic = control_my_device;
+  subs[2].callback = control_callback;
+  subs[3].topic = command_my_device;
+  subs[3].callback = command_callback;
   *subscriptions = subs;
-  *nSubscriptions = 3;
+  *nSubscriptions = 4;
+
+#undef SIZE
+
+  configure_sensors();
+
   return 1;
 }
 
-int snappysense_get_message(char* topic_buf, size_t topic_bufsiz, uint8_t* payload_buf, size_t payload_bufsiz, size_t* payloadLen) {  
+int snappysense_get_startup(char* topic_buf, size_t topic_bufsiz, uint8_t* payload_buf, size_t payload_bufsiz, size_t* payloadLen) {
+  time_t t = time(NULL);
+  if (snprintf(topic_buf, topic_bufsiz, snappy_startup_fmt, DEVICE_CLASS, DEVICE_ID) >= topic_bufsiz) {
+    /* overflow */
+    return 0;
+  }
+  if (snprintf(payload_buf, payload_bufsiz, "{\"time\": %llu, \"reading_interval\": %lld}",
+	       (unsigned long long)t,
+	       (unsigned long long)READING_INTERVAL) >= payload_bufsiz) {
+    /* overflow */
+    return 0;
+  }
+  return 1;
+}
+
+int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* payload_buf, size_t payload_bufsiz, size_t* payloadLen) {  
   static time_t last_time;
   static int last_temperature;
   static int last_humidity;
@@ -203,46 +139,39 @@ int snappysense_get_message(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
 
   time_t t = time(NULL);
   time_t t_delta = t - last_time;
-  if (t_delta < DEVICE_MIN_SECONDS_BETWEEN_REPORTS) {
+  if (t_delta < READING_INTERVAL) {
     /* Too soon */
     return 0;
   }
 
-  int temp = read_temperature();
-  int hum = read_humidity();
-  if (temp == last_temperature && hum == last_humidity && t_delta < DEVICE_MAX_SECONDS_BETWEEN_REPORTS) {
+  int temp = has_temperature() ? read_temperature() : last_temperature;
+  int hum = has_humidity() ? read_humidity() : last_humidity;
+  if (temp == last_temperature && hum == last_humidity && t_delta < CALL_HOME_INTERVAL) {
     /* No change and no need to report */
     return 0;
   }
 
-  if (strlen(DEVICE_READING_TOPIC) >= topic_bufsiz) {
+  if (snprintf(topic_buf, topic_bufsiz, snappy_reading_fmt, DEVICE_CLASS, DEVICE_ID) >= topic_bufsiz) {
     /* Overflow */
+#ifndef NDEBUG
+    fprintf(stderr, "Topic buffer too small for reading topic\n");
+#endif
     return 0;
   }
-  strcpy(topic_buf, DEVICE_READING_TOPIC);
 
+  int success = 1;
   size_t avail = payload_bufsiz;
   char* buf = (char*)payload_buf;
-  if (!emit(&buf, &avail, "{\"device\": \"rpi2\"")) {
-    return 0;
-  }
-  if (MAYBE_LAT != NULL) {
-    assert(MAYBE_LON != NULL);
-    if (!emit(&buf, &avail, ", \"lat\": %s, \"lon\": %s", MAYBE_LAT, MAYBE_LON)) {
-      return 0;
-    }
-    if (MAYBE_ALT != NULL) {
-      if (!emit(&buf, &avail, ", \"alt\": %s", MAYBE_ALT)) {
-	return 0;
-      }
-    }
-  } else {
-    assert(MAYBE_LOC != NULL);
-    if (!emit(&buf, &avail, ", \"loc\": \"%s\"", MAYBE_LOC)) {
-      return 0;
-    }
-  }
-  if (!emit(&buf, &avail, ", \"time\": %llu, \"temperature\": %d, \"humidity\": %d}", (unsigned long long)t, temp, hum)) {
+
+  success && (success = emit(&buf, &avail, "{\"time\": %lld", (unsigned long long)t));
+  has_temperature() && success && (success = emit(&buf, &avail, "\"temperature\": %d", temp));
+  has_humidity() && success && (success = emit(&buf, &avail, "\"humidity\": %d", hum));
+  success && (success = emit(&buf, &avail, "}"));
+
+  if (!success) {
+#ifndef NDEBUG
+    fprintf(stderr, "Payload buffer too small for reading\n");
+#endif
     return 0;
   }
 
@@ -251,6 +180,84 @@ int snappysense_get_message(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
   last_temperature = temp;
   last_humidity = hum;
   return 1;
+}
+
+/* Callbacks for subscriptions */
+
+/* Control message.  All fields are optional:
+ *
+ *    { enable: <integer>, reading_interval: <integer> }
+ */
+static void control_callback(const char* topic, const uint8_t* payload, size_t payloadLen) {
+  JSONPair_t pair = { 0 };
+  JSONStatus_t result;
+  size_t start = 0, next = 0;
+  result = JSON_Validate((const char*)payload, payloadLen);
+  if (result == JSONSuccess) {
+    for (;;) {
+      result = JSON_Iterate((const char*)payload, payloadLen, &start, &next, &pair);
+      if (result != JSONSuccess) {
+	break;
+      }
+      int v;
+      if (get_json_integer(&pair, "enable", &v) && (v == 0 || v == 1)) {
+	DEVICE_ENABLED = (v != 0);
+      } else if (get_json_integer(&pair, "reading_interval", &v) && v > 0) {
+	READING_INTERVAL = v;
+      } else {
+	/* bogus */
+      }
+    }
+  }
+}
+
+/* Command message.  All fields are mandatory:
+ *
+ *   { sensor: <string>, reading: <number>, ideal: <number> }
+ *
+ * where `sensor` is one of the known types:
+ *   "temperature"
+ *   "humidity"
+ */
+static void command_callback(const char* topic, const uint8_t* payload, size_t payloadLen) {
+  JSONPair_t pair = { 0 };
+  JSONStatus_t result;
+  size_t start = 0, next = 0;
+  int reading_value, ideal_value;
+  int got_reading = 0, got_ideal = 0, got_sensor = 0, is_temperature = 0, is_humidity = 0;
+  result = JSON_Validate((const char*)payload, payloadLen);
+  if (result == JSONSuccess) {
+    for (;;) {
+      result = JSON_Iterate((const char*)payload, payloadLen, &start, &next, &pair);
+      if (result != JSONSuccess) {
+	break;
+      }
+      char sensor_buf[128];
+      if (!got_reading && get_json_integer(&pair, "reading", &reading_value)) {
+	got_reading = 1;
+      } else if (!got_ideal && get_json_integer(&pair, "ideal", &ideal_value)) {
+	got_ideal = 1;
+      } else if (!got_sensor && get_json_string(&pair, "sensor", sensor_buf, sizeof(sensor_buf))) {
+	got_sensor =1;
+	if (strcmp(sensor_buf, "temperature") == 0) {
+	  is_temperature = 1;
+	} else if (strcmp(sensor_buf, "humidity") == 0) {
+	  is_humidity = 1;
+	} else {
+	  /* bogus */
+	}
+      } else {
+	/* bogus */
+      }
+    }
+  }
+  if (got_reading && got_ideal) {
+    if (has_temperature() && is_temperature) {
+      adjust_temperature(reading_value, ideal_value);
+    } else if (has_humidity() && is_humidity) {
+      adjust_humidity(reading_value, ideal_value);
+    }
+  }
 }
 
 /* String manipulation */
@@ -303,21 +310,41 @@ static int emit(char** bufp, size_t* availp, const char* fmt, ...) {
   return 1;
 }
 
-/* Sensor readings */
-
-static int read_temperature() {
-  /* TODO: Read an actual sensor */
-  static int temp = 1;
-  int t = temp;
-  temp += 1;
-  return t;
+static int get_json_integer(JSONPair_t* pair, const char* key, int* val) {
+  if (pair->jsonType != JSONNumber) {
+    return 0;
+  }
+  if (strlen(key) != pair->keyLength || strncmp(key, pair->key, pair->keyLength) != 0) {
+    return 0;
+  }
+  char tmp[128];
+  if (pair->valueLength >= sizeof(tmp)) {
+    return 0;
+  }
+  memcpy(tmp, pair->value, pair->valueLength);
+  tmp[pair->valueLength] = 0;
+  if (!safe_json_number(tmp)) {
+    return 0;
+  }
+  double v = strtod(tmp, NULL);
+  if (v < 0 || floor(v) != v || v > INT_MAX) {
+    return 0;
+  }
+  *val = (int)v;
+  return 1;
 }
 
-static int read_humidity() {
-  /* TODO: Read an actual sensor */
-  static int hum = 100;
-  int h = hum;
-  hum -= 1;
-  return h;
+static int get_json_string(JSONPair_t* pair, const char* key, char* buf, size_t bufsiz) {
+  if (pair->jsonType != JSONString) {
+    return 0;
+  }
+  if (strlen(key) != pair->keyLength || strncmp(key, pair->key, pair->keyLength) != 0) {
+    return 0;
+  }
+  if (pair->valueLength >= bufsiz) {
+    return 0;
+  }
+  memcpy(buf, pair->value, pair->valueLength);
+  buf[pair->valueLength] = 0;
+  return 1;
 }
-

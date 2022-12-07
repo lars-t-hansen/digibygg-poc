@@ -3,6 +3,7 @@
 #ifndef snappysense_h_included
 #define snappysense_h_included
 
+#include <stdint.h>
 #include "configfile.h"
 
 /*
@@ -18,7 +19,7 @@
 
 typedef struct subscription_t {
   const char* topic;
-  void (*callback)(const char* topic, uint8_t* payload, size_t payload_length);
+  void (*callback)(const char* topic, const uint8_t* payload, size_t payload_length);
 } subscription_t;
 
 /**
@@ -28,16 +29,43 @@ typedef struct subscription_t {
  * *n_subscriptions > 0, then the callee *must* set *subscriptions to an array
  * of length at least *n_subscriptions that has topics and callbacks.
  *
+ * NOTE that at the moment, the subscriptions should not use wildcards, as
+ * handleIncomingPublish() in the MQTT client does not handle these.
+ *
  * Returns 1 if everything is OK, 0 on fatal error.
  */
 int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t* n_subscriptions);
 
 /**
- * Get a payload if there is one.  Will not block for long but may block while 
+ * Get a startup payload if there is one.  Will not block for long but may block while 
+ * obtaining startup data.
+ *
+ * Return 1 if there is a new payload that fits in the buffer and 0 if not.
+ */
+int snappysense_get_startup(char* topicBuf, size_t topicBufsiz,
+			    uint8_t* payloadBuf, size_t payloadBufsiz,
+			    size_t* payloadLen);
+
+/**
+ * Get a reading payload if there is one.  Will not block for long but may block while 
  * obtaining sensor readings.
  *
  * Return 1 if there is a new payload that fits in the buffer and 0 if not.
  */
-int snappysense_get_message(char* topicBuf, size_t topicBufsiz, uint8_t* payloadBuf, size_t payloadBufsiz, size_t* payloadLen);
+int snappysense_get_reading(char* topicBuf, size_t topicBufsiz,
+			    uint8_t* payloadBuf, size_t payloadBufsiz,
+			    size_t* payloadLen);
+
+/* Sensor layer.  The *types* of known sensors are baked into the code but
+ * whether a device has a particular sensor is configured / detected at
+ * run-time.  The code reporting readings is sensitive to this.
+ */
+void configure_sensors();
+int has_temperature();
+int read_temperature();
+void adjust_temperature(int reading, int ideal);
+int has_humidity();
+int read_humidity();
+void adjust_humidity(int reading, int ideal);
 
 #endif /* snappysense_h_included */

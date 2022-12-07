@@ -13,7 +13,7 @@ STDLIB=$(AWS)/libraries/standard
 
 COMPILE=$(CC) -I$(STDLIB)/coreMQTT/source/include -I$(STDLIB)/coreMQTT/source/interface -I$(STDLIB)/coreJSON/source/include -I$(STDLIB)/backoffAlgorithm/source/include -I$(AWS)/demos/logging-stack -I$(AWS)/platform/posix/transport/include -I$(AWS)/platform/include -I. -O2 -c $<
 
-OBJECTS=mqtt-client.o configfile.o snappysense.o backoff_algorithm.o core_mqtt.o core_mqtt_state.o core_mqtt_serializer.o
+OBJECTS=mqtt-client.o configfile.o snappysense.o sensors.o backoff_algorithm.o core_mqtt.o core_mqtt_state.o core_mqtt_serializer.o
 
 .c.o:
 	$(COMPILE)
