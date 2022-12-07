@@ -1,4 +1,4 @@
-/* -*- fill-column: 80 -*- */
+/* -*- fill-column: 100 -*- */
 
 /* Copyright 2022 KnowIt ObjectNet AS */
 /* Author Lars T Hansen */
@@ -10,7 +10,7 @@
 void configure_sensors() {
 }
 
-int has_temperature() {
+int has_temperature_sensor() {
   return 1;
 }
 
@@ -22,6 +22,10 @@ int read_temperature() {
   return t;
 }
 
+int has_temperature_actuator() {
+  return 1;
+}
+
 void adjust_temperature(int reading, int ideal) {
   /* TODO: Control an actual energy source */
   if (reading > ideal) {
@@ -31,7 +35,7 @@ void adjust_temperature(int reading, int ideal) {
   }
 }
 
-int has_humidity() {
+int has_humidity_sensor() {
   return 1;
 }
 
@@ -41,6 +45,10 @@ int read_humidity() {
   int h = hum;
   hum -= 1;
   return h;
+}
+
+int has_humidity_actuator() {
+  return 1;
 }
 
 void adjust_humidity(int reading, int ideal) {

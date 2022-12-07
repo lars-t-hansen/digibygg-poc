@@ -1,3 +1,5 @@
+/* -*- fill-column: 100 -*- */
+
 /* Copyright 2022 KnowIt ObjectNet AS */
 /* Author: Lars T Hansen */
 

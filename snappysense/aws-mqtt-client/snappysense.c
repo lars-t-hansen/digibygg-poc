@@ -1,12 +1,11 @@
-/* -*- fill-column: 80 -*- */
+/* -*- fill-column: 100 -*- */
 
 /* Copyright 2022 KnowIt ObjectNet AS */
 /* Author Lars T Hansen */
 
-/* Snappysense application logic.  The mqtt client code (see mqtt-client.c) is
- * generic.  The application logic is polled by the client for outgoing
- * messages, and it can subscribe and unsubscribe to topics with the client,
- * registering callbacks for the topics.
+/* Snappysense application logic.  The mqtt client code (see mqtt-client.c) is generic.  The
+ * application logic is polled by the client for outgoing messages, and it can subscribe and
+ * unsubscribe to topics with the client, registering callbacks for the topics.
  */
 
 #include <assert.h>
@@ -113,13 +112,18 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
   return 1;
 }
 
-int snappysense_get_startup(char* topic_buf, size_t topic_bufsiz, uint8_t* payload_buf, size_t payload_bufsiz, size_t* payloadLen) {
+int snappysense_get_startup(char* topic_buf, size_t topic_bufsiz,
+			    uint8_t* payload_buf, size_t payload_bufsiz,
+			    size_t* payloadLen) {
   time_t t = time(NULL);
-  if (snprintf(topic_buf, topic_bufsiz, snappy_startup_fmt, DEVICE_CLASS, DEVICE_ID) >= topic_bufsiz) {
+  if (snprintf(topic_buf, topic_bufsiz, snappy_startup_fmt,
+	       DEVICE_CLASS,
+	       DEVICE_ID) >= topic_bufsiz) {
     /* overflow */
     return 0;
   }
-  if ((*payloadLen = snprintf(payload_buf, payload_bufsiz, "{\"time\": %llu, \"reading_interval\": %lld}",
+  if ((*payloadLen = snprintf(payload_buf, payload_bufsiz,
+			      "{\"time\": %llu, \"reading_interval\": %lld}",
 			      (unsigned long long)t,
 			      (unsigned long long)READING_INTERVAL) >= payload_bufsiz)) {
     /* overflow */
@@ -129,7 +133,9 @@ int snappysense_get_startup(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
   return 1;
 }
 
-int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* payload_buf, size_t payload_bufsiz, size_t* payloadLen) {  
+int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz,
+			    uint8_t* payload_buf, size_t payload_bufsiz,
+			    size_t* payloadLen) {
   static time_t last_time;
   static int last_temperature;
   static int last_humidity;
@@ -145,14 +151,16 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
     return 0;
   }
 
-  int temp = has_temperature() ? read_temperature() : last_temperature;
-  int hum = has_humidity() ? read_humidity() : last_humidity;
+  int temp = has_temperature_sensor() ? read_temperature() : last_temperature;
+  int hum = has_humidity_sensor() ? read_humidity() : last_humidity;
   if (temp == last_temperature && hum == last_humidity && t_delta < CALL_HOME_INTERVAL) {
     /* No change and no need to report */
     return 0;
   }
 
-  if (snprintf(topic_buf, topic_bufsiz, snappy_reading_fmt, DEVICE_CLASS, DEVICE_ID) >= topic_bufsiz) {
+  if (snprintf(topic_buf, topic_bufsiz, snappy_reading_fmt,
+	       DEVICE_CLASS,
+	       DEVICE_ID) >= topic_bufsiz) {
     /* Overflow */
 #ifndef NDEBUG
     fprintf(stderr, "Topic buffer too small for reading topic\n");
@@ -165,8 +173,8 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
   char* buf = (char*)payload_buf;
 
   success && (success = emit(&buf, &avail, "{\"time\": %lld", (unsigned long long)t));
-  has_temperature() && success && (success = emit(&buf, &avail, ", \"temperature\": %d", temp));
-  has_humidity() && success && (success = emit(&buf, &avail, ", \"humidity\": %d", hum));
+  has_temperature_sensor() && success && (success = emit(&buf, &avail, ", \"temperature\": %d", temp));
+  has_humidity_sensor() && success && (success = emit(&buf, &avail, ", \"humidity\": %d", hum));
   success && (success = emit(&buf, &avail, "}"));
 
   if (!success) {
@@ -256,9 +264,9 @@ static void command_callback(const char* topic, const uint8_t* payload, size_t p
     }
   }
   if (got_reading && got_ideal) {
-    if (has_temperature() && is_temperature) {
+    if (has_temperature_actuator() && is_temperature) {
       adjust_temperature(reading_value, ideal_value);
-    } else if (has_humidity() && is_humidity) {
+    } else if (has_humidity_actuator() && is_humidity) {
       adjust_humidity(reading_value, ideal_value);
     }
   }
