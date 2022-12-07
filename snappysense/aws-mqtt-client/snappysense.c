@@ -78,6 +78,7 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
 
 #define SIZE 256
 
+#if 0
   static char control_all_devices[SIZE];
   static char control_my_class[SIZE];
   static char control_my_device[SIZE];
@@ -105,7 +106,7 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
   subs[3].callback = command_callback;
   *subscriptions = subs;
   *nSubscriptions = 4;
-
+#endif
 #undef SIZE
 
   configure_sensors();
@@ -119,12 +120,13 @@ int snappysense_get_startup(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
     /* overflow */
     return 0;
   }
-  if (snprintf(payload_buf, payload_bufsiz, "{\"time\": %llu, \"reading_interval\": %lld}",
-	       (unsigned long long)t,
-	       (unsigned long long)READING_INTERVAL) >= payload_bufsiz) {
+  if ((*payloadLen = snprintf(payload_buf, payload_bufsiz, "{\"time\": %llu, \"reading_interval\": %lld}",
+			      (unsigned long long)t,
+			      (unsigned long long)READING_INTERVAL) >= payload_bufsiz)) {
     /* overflow */
     return 0;
   }
+  *payloadLen = strlen(payload_buf);
   return 1;
 }
 
@@ -164,8 +166,8 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
   char* buf = (char*)payload_buf;
 
   success && (success = emit(&buf, &avail, "{\"time\": %lld", (unsigned long long)t));
-  has_temperature() && success && (success = emit(&buf, &avail, "\"temperature\": %d", temp));
-  has_humidity() && success && (success = emit(&buf, &avail, "\"humidity\": %d", hum));
+  has_temperature() && success && (success = emit(&buf, &avail, ", \"temperature\": %d", temp));
+  has_humidity() && success && (success = emit(&buf, &avail, ", \"humidity\": %d", hum));
   success && (success = emit(&buf, &avail, "}"));
 
   if (!success) {
@@ -174,6 +176,7 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
 #endif
     return 0;
   }
+  *payloadLen = strlen(payload_buf);
 
   /* Committed */
   last_time = t;
@@ -189,6 +192,7 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz, uint8_t* paylo
  *    { enable: <integer>, reading_interval: <integer> }
  */
 static void control_callback(const char* topic, const uint8_t* payload, size_t payloadLen) {
+  fprintf(stderr, "Received control message: %*.s\n", payloadLen, payload);
   JSONPair_t pair = { 0 };
   JSONStatus_t result;
   size_t start = 0, next = 0;
@@ -220,6 +224,7 @@ static void control_callback(const char* topic, const uint8_t* payload, size_t p
  *   "humidity"
  */
 static void command_callback(const char* topic, const uint8_t* payload, size_t payloadLen) {
+  fprintf(stderr, "Received command message: %*.s\n", payloadLen, payload);
   JSONPair_t pair = { 0 };
   JSONStatus_t result;
   size_t start = 0, next = 0;

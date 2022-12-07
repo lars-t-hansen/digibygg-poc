@@ -23,8 +23,7 @@
 
 /* Derived from demos/mqtt/mqtt_demo_mutual_auth.  The demo_config.h
  * file has been brought in-line and anything to do with username /
- * password has been removed.  For now, code to deal with incoming
- * publications has been kept but has been #ifdef'd out.
+ * password has been removed.
  */
 
 /* (From the original)
@@ -62,12 +61,6 @@
 
 /* Clock for timer. */
 #include "clock.h"
-
-/* AWS IoT Core TLS ALPN definitions for MQTT authentication */
-//#include "aws_iot_alpn_defs.h"
-
-/* Include header that defines log levels. */
-//#include "logging_levels.h"
 
 /* Logging configuration. */
 #undef LIBRARY_LOG_NAME
@@ -389,7 +382,9 @@ static int connectToServerWithBackoffRetries( NetworkContext_t * pNetworkContext
  *
  * @return EXIT_FAILURE on failure; EXIT_SUCCESS on success.
  */
-static int subscribePublishLoop( MQTTContext_t * pMqttContext, subscription_t *subscriptions, size_t numSubscriptions );
+static int subscribePublishLoop( MQTTContext_t * pMqttContext,
+				 subscription_t *subscriptions,
+				 size_t numSubscriptions );
 
 /**
  * @brief The function to handle the incoming publishes.
@@ -1155,8 +1150,7 @@ static int subscribeToTopic( MQTTContext_t * pMqttContext, subscription_t* subsc
     /* Start with everything at 0. */
     ( void ) memset( ( void * ) pGlobalSubscriptionList, 0x00, sizeof( pGlobalSubscriptionList ) );
 
-    /* This example subscribes to only one topic and uses QOS1. */
-    pGlobalSubscriptionList[ 0 ].qos = MQTTQoS1;
+    pGlobalSubscriptionList[ 0 ].qos = MQTTQoS0;
     pGlobalSubscriptionList[ 0 ].pTopicFilter = subscription->topic;
     pGlobalSubscriptionList[ 0 ].topicFilterLength = strlen(subscription->topic);
 
@@ -1198,9 +1192,7 @@ static int unsubscribeFromTopic( MQTTContext_t * pMqttContext, subscription_t *s
     /* Start with everything at 0. */
     ( void ) memset( ( void * ) pGlobalSubscriptionList, 0x00, sizeof( pGlobalSubscriptionList ) );
 
-    /* This example subscribes to and unsubscribes from only one topic
-     * and uses QOS1. */
-    pGlobalSubscriptionList[ 0 ].qos = MQTTQoS1;
+    pGlobalSubscriptionList[ 0 ].qos = MQTTQoS0;
     pGlobalSubscriptionList[ 0 ].pTopicFilter = subscription->topic;
     pGlobalSubscriptionList[ 0 ].topicFilterLength = strlen(subscription->topic);
 
@@ -1252,8 +1244,8 @@ static int publishToTopic( MQTTContext_t * pMqttContext, const char* topic, cons
     }
     else
     {
-        /* This example publishes to only one topic and uses QOS1. */
-        outgoingPublishPackets[ publishIndex ].pubInfo.qos = MQTTQoS1;
+        /* This example publishes to only one topic and uses QOS0. */
+        outgoingPublishPackets[ publishIndex ].pubInfo.qos = MQTTQoS0;
         outgoingPublishPackets[ publishIndex ].pubInfo.pTopicName = topic;
         outgoingPublishPackets[ publishIndex ].pubInfo.topicNameLength = strlen(topic);
         outgoingPublishPackets[ publishIndex ].pubInfo.pPayload = payload;
@@ -1403,15 +1395,21 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext, subscription_t *s
 	int done = 0;
 	while (!done)
         {
+	    static int has_sent_startup = 0;
 	    char topic[1024];
 	    uint8_t payload[1024];
-	    size_t payloadLen;
-	    if (!snappysense_get_reading(topic, sizeof(topic), payload, sizeof(payload), &payloadLen)) {
+	    size_t payloadLen = 0;
+	    if (!has_sent_startup) {
+		snappysense_get_startup(topic, sizeof(topic), payload, sizeof(payload), &payloadLen);
+		has_sent_startup = 1;
+	    } else if (!snappysense_get_reading(topic, sizeof(topic), payload, sizeof(payload), &payloadLen)) {
 		done = 1;
-	    } else {
+	    }
+	    if (!done) {
 		LogInfo( ( "Sending Publish to the MQTT topic %.*s.",
 			   strlen(topic),
 			   topic ) );
+		fprintf(stderr, "Message: %.*s\n", payloadLen, payload);
 		returnStatus = publishToTopic( pMqttContext, topic, payload, payloadLen );
 	    }
 
