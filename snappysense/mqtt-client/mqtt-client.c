@@ -1442,7 +1442,7 @@ static int subscribePublishLoop( MQTTContext_t * pMqttContext, int brokerSession
 			   strlen(topic),
 			   topic ) );
 		*/
-		fprintf(stderr, "Message: %.*s\n", payloadLen, payload);
+		fprintf(stderr, "Message: %.*s\n", (int)payloadLen, payload);
 		returnStatus = publishToTopic( pMqttContext, topic, payload, payloadLen );
 	    }
 
@@ -1693,7 +1693,7 @@ int main( int argc,
                 /* Log error to indicate connection failure after all
                  * reconnect attempts are over. */
                 LogError( ( "Failed to connect to MQTT broker %.*s.",
-                            strlen(AWS_IOT_ENDPOINT),
+                            (int)strlen(AWS_IOT_ENDPOINT),
                             AWS_IOT_ENDPOINT ) );
             }
             else
