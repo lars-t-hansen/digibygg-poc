@@ -29,9 +29,9 @@ int has_temperature_actuator() {
 void adjust_temperature(int reading, int ideal) {
   /* TODO: Control an actual energy source */
   if (reading > ideal) {
-    fprintf(stderr, "Adjusting temperature DOWN");
+    fprintf(stderr, "Adjusting temperature DOWN\n");
   } else if (ideal > reading) {
-    fprintf(stderr, "Adjusting temperature UP");
+    fprintf(stderr, "Adjusting temperature UP\n");
   }
 }
 
@@ -55,8 +55,8 @@ void adjust_humidity(int reading, int ideal) {
   /* TODO: Control an actual humidifyer */
   if (reading > ideal) {
     /* Iffy */
-    fprintf(stderr, "Adjusting humidity DOWN");
+    fprintf(stderr, "Adjusting humidity DOWN\n");
   } else if (ideal > reading) {
-    fprintf(stderr, "Adjusting humidity UP");
+    fprintf(stderr, "Adjusting humidity UP\n");
   }
 }

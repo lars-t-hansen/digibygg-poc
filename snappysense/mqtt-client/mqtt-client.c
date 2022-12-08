@@ -1608,7 +1608,6 @@ int main( int argc,
 #endif
 #endif
     /* FIXME: the file also has the port number */
-    /* FIXME: the file also has the polling interval */
     AWS_IOT_ENDPOINT = must_lookup(&cfg, "AWS_IOT_ENDPOINT");
     ROOT_CA_CERT_PATH = must_lookup(&cfg, "ROOT_CA_CERT_PATH");
     CLIENT_CERT_PATH = must_lookup(&cfg, "CLIENT_CERT_PATH");
@@ -1679,6 +1678,9 @@ int main( int argc,
 	    // setup.  we are guaranteed a clean session for the device, at a
 	    // small startup cost.
 	   
+	    /* FIXME: Abort here if the errors are fatal, eg, certs or
+	       keys not found or not valid */
+
             /* Attempt to connect to the MQTT broker. If connection fails, retry after
              * a timeout. Timeout value will be exponentially increased till the maximum
              * attempts are reached or maximum timeout value is reached. The function
