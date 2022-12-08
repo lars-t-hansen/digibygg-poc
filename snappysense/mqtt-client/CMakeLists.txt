@@ -11,6 +11,7 @@ set( STDLIB "${AWS}/libraries/standard" )
 set( LIBDIR "${AWS}/build/lib" )
 
 add_executable( snappysense snappysense.c configfile.c sensors.c mqtt-client.c )
+
 target_compile_options( snappysense PRIVATE -O2 )
 
 target_include_directories( snappysense
@@ -24,6 +25,7 @@ target_include_directories( snappysense
   PRIVATE "${AWS}/platform/include" )
 
 target_link_options( snappysense PRIVATE -lm )
+
 target_link_libraries( snappysense
   "${LIBDIR}/libaws_iot_backoff_algorithm.so"
   "${LIBDIR}/libaws_iot_http.so"

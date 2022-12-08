@@ -32,15 +32,18 @@ The final executable is build/snappysense.
 
 **RUNNING**
 
-Now update snappysense.cfg in this directory to reflect the values for your device: the device ID
-and class, the paths to its secrets, and so on - pretty much every value in that file apart from the
-MQTT port should be changed.
+Now update snappysense.cfg in this directory, or a copy of it, to reflect the values for your
+device: the device ID and class, the paths to its secrets, and so on - pretty much every value in
+that file apart from the MQTT port should be changed.
 
 To run, the libraries built by the build process must be in a suitable path, I usually do
 
 ```
-   LD_LIBRARY_PATH=$AWS/build/lib build/snappysense
+   LD_LIBRARY_PATH=$AWS/build/lib build/snappysense snappysense.cfg
 ```
+
+For distribution, the few libraries needed can be copied from the AWS directory and packaged with
+the snappysense binary.  See the CMakeLists.txt file in this directory for the full list.
 
 **ABOUT THE SOURCES**
 

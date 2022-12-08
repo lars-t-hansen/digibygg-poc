@@ -57,22 +57,43 @@ static void command_callback(const char* topic, const uint8_t* payload, size_t p
 static int get_json_integer(JSONPair_t* pair, const char* key, int* val);
 static int get_json_string(JSONPair_t* pair, const char* key, char* buf, size_t bufsiz);
 
-int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t *nSubscriptions) {
-  DEVICE_CLASS = lookup_config(cfg, "DEVICE_CLASS");
-  if (!safe_json_string(DEVICE_CLASS)) {
-    return 0;
+/* Usage: snappysense configfile */
+int main(int argc, char** argv)
+{
+  if (argc <= 1) {
+    fprintf(stderr, "Usage: snappysense configfile\n");
+    return EXIT_FAILURE;
   }
-  DEVICE_ID = lookup_config(cfg, "DEVICE_ID");
-  if (!safe_json_string(DEVICE_ID)) {
-    return 0;
+  const char* configfile = argv[1];
+
+  config_file_t cfg;
+  init_configfile(&cfg);
+  if (!read_configfile(configfile, &cfg)) {
+#ifndef NDEBUG
+    fprintf(stderr, "Config file %s inaccessible", configfile);
+#endif
+    return EXIT_FAILURE;
   }
 
-  /* All device characteristics */
-  if (DEVICE_CLASS == NULL || DEVICE_ID == NULL) {
+#if 0
 #ifndef NDEBUG
-    fprintf(stderr, "Need valid DEVICE_CLASS and DEVICE_ID");
+  dump_config(&cfg, stdout);
 #endif
-    return 0;
+#endif
+
+  DEVICE_CLASS = lookup_config(&cfg, "DEVICE_CLASS");
+  if (DEVICE_CLASS == NULL || !safe_json_string(DEVICE_CLASS)) {
+#ifndef NDEBUG
+    fprintf(stderr, "Need valid DEVICE_CLASS");
+#endif
+    return EXIT_FAILURE;
+  }
+  DEVICE_ID = lookup_config(&cfg, "DEVICE_ID");
+  if (DEVICE_ID == NULL || !safe_json_string(DEVICE_ID)) {
+#ifndef NDEBUG
+    fprintf(stderr, "Need valid DEVICE_ID");
+#endif
+    return EXIT_FAILURE;
   }
 
 #define SIZE 256
@@ -83,16 +104,28 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
   static char command_my_device[SIZE];
   static subscription_t subs[4];
   if (snprintf(control_all_devices, SIZE, snappy_control_fmt, "all") >= SIZE) {
-    return 0;
+#ifndef NDEBUG
+    fprintf(stderr, "Buffer overflow");
+#endif
+    return EXIT_FAILURE;
   }
   if (snprintf(control_my_class, SIZE, snappy_control_fmt, DEVICE_CLASS) >= SIZE) {
-    return 0;
+#ifndef NDEBUG
+    fprintf(stderr, "Buffer overflow");
+#endif
+    return EXIT_FAILURE;
   }
   if (snprintf(control_my_device, SIZE, snappy_control_fmt, DEVICE_ID) >= SIZE) {
-    return 0;
+#ifndef NDEBUG
+    fprintf(stderr, "Buffer overflow");
+#endif
+    return EXIT_FAILURE;
   }
   if (snprintf(command_my_device, SIZE, snappy_command_fmt, DEVICE_ID) >= SIZE) {
-    return 0;
+#ifndef NDEBUG
+    fprintf(stderr, "Buffer overflow");
+#endif
+    return EXIT_FAILURE;
   }
   subs[0].topic = control_all_devices;
   subs[0].callback = control_callback;
@@ -102,14 +135,16 @@ int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t 
   subs[2].callback = control_callback;
   subs[3].topic = command_my_device;
   subs[3].callback = command_callback;
-  *subscriptions = subs;
-  *nSubscriptions = 4;
+  size_t numSubscriptions = 4;
 
 #undef SIZE
 
   configure_sensors();
 
-  return 1;
+  int retval = mqttClientMainLoop(&cfg, numSubscriptions, subs);
+
+  destroy_configfile(&cfg);
+  return retval;
 }
 
 int snappysense_get_startup(char* topic_buf, size_t topic_bufsiz,
@@ -273,12 +308,9 @@ static void command_callback(const char* topic, const uint8_t* payload, size_t p
   }
 }
 
-/* String manipulation */
+/* String and JSON manipulation */
 
 static int safe_json_string(const char* p) {
-  if (p == NULL) {
-    return 1;
-  }
   for (; *p != 0 ; p++ ) {
     if (*p == '"' || *p < ' ' || *p > '~') {
       return 0;
@@ -288,9 +320,6 @@ static int safe_json_string(const char* p) {
 }
 
 static int safe_json_number(const char* p) {
-  if (p == NULL) {
-    return 1;
-  }
   const char* start = p;
   while (*p && isdigit(*p)) {
     p++;

@@ -1594,32 +1594,19 @@ const char* must_lookup(config_file_t* cfg, const char *name) {
  * are resent in this demo. In order to support retransmission all the outgoing
  * publishes are stored until a PUBACK is received.
  */
-int main( int argc,
-          char ** argv )
+int mqttClientMainLoop(config_file_t* cfg,
+		       size_t numSubscriptions,
+		       subscription_t* subscriptions)
 {
-    config_file_t cfg;
-    init_configfile(&cfg);
-    if (!read_configfile("snappysense.cfg", &cfg)) {
-	abort();
-    }
-#if 0
-#ifndef NDEBUG
-    dump_config(&cfg, stdout);
-#endif
-#endif
     /* FIXME: the file also has the port number */
-    AWS_IOT_ENDPOINT = must_lookup(&cfg, "AWS_IOT_ENDPOINT");
-    ROOT_CA_CERT_PATH = must_lookup(&cfg, "ROOT_CA_CERT_PATH");
-    CLIENT_CERT_PATH = must_lookup(&cfg, "CLIENT_CERT_PATH");
-    CLIENT_PRIVATE_KEY_PATH = must_lookup(&cfg, "CLIENT_PRIVATE_KEY_PATH");
-    CLIENT_IDENTIFIER = must_lookup(&cfg, "CLIENT_IDENTIFIER");
-    OS_NAME = must_lookup(&cfg, "OS_NAME");
-    OS_VERSION = must_lookup(&cfg, "OS_VERSION");
-    HARDWARE_PLATFORM_NAME = must_lookup(&cfg, "HARDWARE_PLATFORM_NAME");
-
-    size_t numSubscriptions = 0;
-    subscription_t *subscriptions = NULL;
-    snappysense_init(&cfg, &subscriptions, &numSubscriptions);
+    AWS_IOT_ENDPOINT = must_lookup(cfg, "AWS_IOT_ENDPOINT");
+    ROOT_CA_CERT_PATH = must_lookup(cfg, "ROOT_CA_CERT_PATH");
+    CLIENT_CERT_PATH = must_lookup(cfg, "CLIENT_CERT_PATH");
+    CLIENT_PRIVATE_KEY_PATH = must_lookup(cfg, "CLIENT_PRIVATE_KEY_PATH");
+    CLIENT_IDENTIFIER = must_lookup(cfg, "CLIENT_IDENTIFIER");
+    OS_NAME = must_lookup(cfg, "OS_NAME");
+    OS_VERSION = must_lookup(cfg, "OS_VERSION");
+    HARDWARE_PLATFORM_NAME = must_lookup(cfg, "HARDWARE_PLATFORM_NAME");
 
     int returnStatus = EXIT_SUCCESS;
     MQTTContext_t mqttContext = { 0 };
@@ -1627,9 +1614,6 @@ int main( int argc,
     OpensslParams_t opensslParams = { 0 };
     bool clientSessionPresent = false, brokerSessionPresent = false;
     struct timespec tp;
-
-    ( void ) argc;
-    ( void ) argv;
 
     /* Set the pParams member of the network context with desired transport. */
     networkContext.pParams = &opensslParams;
@@ -1751,8 +1735,6 @@ int main( int argc,
             sleep( MQTT_SUBPUB_LOOP_DELAY_SECONDS );
         }
     }
-
-    destroy_configfile(&cfg);
 
     return returnStatus;
 }

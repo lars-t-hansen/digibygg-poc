@@ -21,6 +21,13 @@ typedef struct subscription_t {
   void (*callback)(const char* topic, const uint8_t* payload, size_t payload_length);
 } subscription_t;
 
+/*
+ * The generic client loop.
+ */
+int mqttClientMainLoop(config_file_t* cfg,
+		       size_t numSubscriptions,
+		       subscription_t* subscriptions);
+
 /* Initialize variables from the config file and obtain subscriptions.
  *
  * The callee may set *n_subscriptions (its default value is 0).  If *n_subscriptions > 0, then the
