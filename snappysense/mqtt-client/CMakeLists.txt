@@ -6,18 +6,15 @@ project( snappysense
 set( CMAKE_C_STANDARD 90 )
 set( CMAKE_C_STANDARD_REQUIRED True )
 
-set( AWS "/users/lth/p/iotcore/aws-iot-device-sdk-embedded-C" )
+set( AWS "/home/debian/aws-iot-device-sdk-embedded-C" )
 set( STDLIB "${AWS}/libraries/standard" )
 set( LIBDIR "${AWS}/build/lib" )
 
 add_executable( snappysense snappysense.c configfile.c sensors.c mqtt-client.c )
 target_compile_options( snappysense PRIVATE -O2 )
 
-# TODO: The ssl include dir is a macOS + brew thing.
-
 target_include_directories( snappysense
   PRIVATE "."
-  PRIVATE "/opt/homebrew/opt/openssl@1.1/include"
   PRIVATE "${STDLIB}/coreMQTT/source/include"
   PRIVATE "${STDLIB}/coreMQTT/source/interface"
   PRIVATE "${STDLIB}/coreJSON/source/include"
@@ -26,9 +23,12 @@ target_include_directories( snappysense
   PRIVATE "${AWS}/platform/posix/transport/include"
   PRIVATE "${AWS}/platform/include" )
 
-target_link_options( snappysense PRIVATE m )
+target_link_options( snappysense PRIVATE -lm )
 target_link_libraries( snappysense
-  "${LIBDIR}/libcoreMQTT.so"
-  "${LIBDIR}/libcoreHTTP.so"
-  "${LIBDIR}/libcoreJSON.so" )
+  "${LIBDIR}/libaws_iot_backoff_algorithm.so"
+  "${LIBDIR}/libaws_iot_http.so"
+  "${LIBDIR}/libaws_iot_json.so"
+  "${LIBDIR}/libaws_iot_mqtt.so"
+  "${LIBDIR}/libclock_posix.so"
+  "${LIBDIR}/libopenssl_posix.so" )
 
