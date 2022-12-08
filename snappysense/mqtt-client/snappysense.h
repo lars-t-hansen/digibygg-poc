@@ -22,24 +22,12 @@ typedef struct subscription_t {
 } subscription_t;
 
 /*
- * The generic client loop.
+ * The generic client loop.  main() calls this, passing in the parsed config file and the
+ * information about the subscriptions we want.  (Subscriptions are not dynamic in this setup.)
  */
 int mqttClientMainLoop(config_file_t* cfg,
 		       size_t numSubscriptions,
 		       subscription_t* subscriptions);
-
-/* Initialize variables from the config file and obtain subscriptions.
- *
- * The callee may set *n_subscriptions (its default value is 0).  If *n_subscriptions > 0, then the
- * callee *must* set *subscriptions to an array of length at least *n_subscriptions that has topics
- * and callbacks.
- *
- * NOTE that at the moment, the subscriptions should not use wildcards, as handleIncomingPublish()
- * in the MQTT client does not handle these.
- *
- * Returns 1 if everything is OK, 0 on fatal error.
- */
-int snappysense_init(config_file_t* cfg, subscription_t** subscriptions, size_t* n_subscriptions);
 
 /* Get a startup payload if there is one.  Will not block for long but may block while 
  * obtaining startup data.

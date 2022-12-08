@@ -41,10 +41,16 @@ static const char* DEVICE_ID;
 /* Runtime configuration.  Could be read from config file (but is currently
  * not); can be configured by server.
  */
+/* TODO: Read at least the interval from the config file, fallback to a better
+ * default than 5 seconds.
+ */
 static int DEVICE_ENABLED = 1;
 static time_t READING_INTERVAL = 5; /* Seconds */
 
 /* Fixed maximum reporting interval even if no new sensor values. */
+/* TODO: Read this from the config file, fallback to a better default
+ * than 300 seconds.
+ */
 static time_t CALL_HOME_INTERVAL = 5*60; /* Seconds */
 
 static int safe_json_string(const char* p);
