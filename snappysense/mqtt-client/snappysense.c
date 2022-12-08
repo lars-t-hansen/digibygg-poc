@@ -122,14 +122,14 @@ int snappysense_get_startup(char* topic_buf, size_t topic_bufsiz,
     /* overflow */
     return 0;
   }
-  if ((*payloadLen = snprintf(payload_buf, payload_bufsiz,
+  if ((*payloadLen = snprintf((char*)payload_buf, payload_bufsiz,
 			      "{\"time\": %llu, \"reading_interval\": %lld}",
 			      (unsigned long long)t,
 			      (unsigned long long)READING_INTERVAL) >= payload_bufsiz)) {
     /* overflow */
     return 0;
   }
-  *payloadLen = strlen(payload_buf);
+  *payloadLen = strlen((char*)payload_buf);
   return 1;
 }
 
@@ -158,7 +158,7 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz,
     return 0;
   }
 
-  if (snprintf(topic_buf, topic_bufsiz, snappy_reading_fmt,
+  if (snprintf((char*)topic_buf, topic_bufsiz, snappy_reading_fmt,
 	       DEVICE_CLASS,
 	       DEVICE_ID) >= topic_bufsiz) {
     /* Overflow */
@@ -183,7 +183,7 @@ int snappysense_get_reading(char* topic_buf, size_t topic_bufsiz,
 #endif
     return 0;
   }
-  *payloadLen = strlen(payload_buf);
+  *payloadLen = strlen((char*)payload_buf);
 
   /* Committed */
   last_time = t;
@@ -224,9 +224,10 @@ static void control_callback(const char* topic, const uint8_t* payload, size_t p
 
 /* Command message.  All fields are mandatory:
  *
- *   { sensor: <string>, reading: <number>, ideal: <number> }
+ *   { actuator: <string>, reading: <number>, ideal: <number> }
  *
- * where `sensor` is one of the known types:
+ * where `actuator` is one of the known types:
+ *
  *   "temperature"
  *   "humidity"
  */
@@ -236,7 +237,7 @@ static void command_callback(const char* topic, const uint8_t* payload, size_t p
   JSONStatus_t result;
   size_t start = 0, next = 0;
   int reading_value, ideal_value;
-  int got_reading = 0, got_ideal = 0, got_sensor = 0, is_temperature = 0, is_humidity = 0;
+  int got_reading = 0, got_ideal = 0, got_actuator = 0, is_temperature = 0, is_humidity = 0;
   result = JSON_Validate((const char*)payload, payloadLen);
   if (result == JSONSuccess) {
     for (;;) {
@@ -244,16 +245,16 @@ static void command_callback(const char* topic, const uint8_t* payload, size_t p
       if (result != JSONSuccess) {
 	break;
       }
-      char sensor_buf[128];
+      char actuator_buf[128];
       if (!got_reading && get_json_integer(&pair, "reading", &reading_value)) {
 	got_reading = 1;
       } else if (!got_ideal && get_json_integer(&pair, "ideal", &ideal_value)) {
 	got_ideal = 1;
-      } else if (!got_sensor && get_json_string(&pair, "sensor", sensor_buf, sizeof(sensor_buf))) {
-	got_sensor =1;
-	if (strcmp(sensor_buf, "temperature") == 0) {
+      } else if (!got_actuator && get_json_string(&pair, "actuator", actuator_buf, sizeof(actuator_buf))) {
+	got_actuator = 1;
+	if (strcmp(actuator_buf, "temperature") == 0) {
 	  is_temperature = 1;
-	} else if (strcmp(sensor_buf, "humidity") == 0) {
+	} else if (strcmp(actuator_buf, "humidity") == 0) {
 	  is_humidity = 1;
 	} else {
 	  /* bogus */
