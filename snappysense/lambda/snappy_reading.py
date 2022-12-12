@@ -16,20 +16,26 @@ import snappy_mqtt
 #   factor - string
 #   reading - number
 
-def lambda_handler(event, context):
+def reading_event(event, context):
+    db = snappy_data.connect()
+    responses = handle_startup_event(db, event, context)
+    for resp in responses:
+        snappy_mqtt.publish(resp[0], resp[1], resp[2])
+
+# Returns array of mqtt responses: [[topic, payload, qos], ...]
+
+def handle_reading_event(db, event, context):
     device = event["device"]
     device_class = event["class"]
     time = event["time"]
     factor = event["factor"]
     reading = event["reading"]
 
-    db = snappy_data.connect()
-
     sensor_device_entry = record_timestamp_and_reading(db, device, time, factor, reading)
     if sensor_device_entry == None:
-        return
+        return []
 
-    trigger_actuator_if_necessary(db, snappy_data.device_location(sensor_device_entry), time, factor, reading)
+    return trigger_actuator_if_necessary(db, snappy_data.device_location(sensor_device_entry), time, factor, reading)
 
 
 # Record the `reading` for the `factor` on the `device` at the `time`. 
@@ -63,8 +69,8 @@ def record_timestamp_and_reading(db, device, time, factor, reading):
 
 
 # Figure out if we need to send a command to an actuator at `location` to adjust the value for
-# `factor`, and if so do it, and record this fact in the device record for the appropriate device
-# for the given `time`.
+# `factor`, and if so record this fact in the device record for the appropriate device for the given
+# `time`, and return the proper mqtt response.
 #
 # A location has a number of actuators, and at most one of those is for the same factor as the
 # reading.
@@ -80,26 +86,26 @@ def record_timestamp_and_reading(db, device, time, factor, reading):
 def trigger_actuator_if_necessary(db, location, time, factor, last_reading):
     location_entry = snappy_data.get_location_entry(db, location)
     if location_entry == None:
-        return
+        return []
 
-    device_name, ideal_fn = snappy_data.find_actuator(location_entry, factor)
+    device_name, ideal_fn = snappy_data.find_actuator_device(location_entry, factor)
     if device_name == None:
-        return
+        return []
     
     ideal = evaluate_ideal(ideal_fn)
     if ideal == None:
         # Error
-        return
+        return []
 
-    device_entry = snappy_data.get_enabled_device(db, device_name)
-    if device_entry == None:
+    device_entry = snappy_data.get_device(db, device_name)
+    if device_entry == None or snappy_data.device_is_disabled(device_entry):
         # Device not found or not enabled
-        return
+        return []
 
     history_entry = snappy_data.get_history_entry(db, device_name)
     if history_entry == None:
         # Should have been created
-        return
+        return []
 
     # Record last contact
 
@@ -113,50 +119,50 @@ def trigger_actuator_if_necessary(db, location, time, factor, last_reading):
         outgoing = {"factor":factor, "reading":last_reading, "ideal":ideal}
         # TODO: Record last command in history
 
+    snappy_data.write_history_entry(history_entry)
+
     if outgoing is not None:
         device_class = snappy_data.device_class(device_entry)
-        snappy_mqtt.publish(f"snappy/control/{device_class}/{device_name}", outgoing, 1)
+        return [[f"snappy/control/{device_class}/{device_name}", outgoing, 1]]
 
-    snappy_data.write_history_entry(history_entry)
+    return []
+
 
 # Try to evaluate the idealfn for the actuator with given parameters.  Return
 # the ideal value (a number) or None.
 
 def evaluate_ideal(idealfn_string):
     ideal_elements = idealfn_string.split('/')
-    if ideal_elements.len() == 0: 
+    if len(ideal_elements) == 0: 
         # Error
-        return
+        return None
 
     fname = ideal_elements[0]
     args = ideal_elements[1:]
     if fname not in idealfns:
         # Error
-        return
+        return None
 
     idealfn = idealfns[fname]
-    if idealfns["arity"] != args.len():
+    if idealfn["arity"] != len(args):
         # Error
         return
 
     # Sigh, we want apply and map
     ideal = None
-    alen = args.len()
+    alen = len(args)
     if alen == 0:
-        ideal = idealfns["fn"]()
+        ideal = idealfn["fn"]()
     elif alen == 1:
-        ideal = idealfns["fn"](float(args[0]))
+        ideal = idealfn["fn"](float(args[0]))
     elif alen == 2:
-        ideal = idealfns["fn"](float(args[0]), float(args[1]))
-    else:
-        # Error
-        return
+        ideal = idealfn["fn"](float(args[0]), float(args[1]))
 
     return ideal
 
 # The IDEAL function "constant(c)" returns c.
 
-def idealfn_constant(sensor_history_entry, c):
+def idealfn_constant(c):
     return c
 
 # We hardcode the arity for the functions in the program so we don't need to
