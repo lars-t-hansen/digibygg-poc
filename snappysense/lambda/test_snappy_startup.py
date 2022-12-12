@@ -22,9 +22,12 @@ def test_startup():
         ],
         BillingMode="PAY_PER_REQUEST"
     )
-    # FIXME: This should have a list of devices at this location
-    dynamodb.put_item(TableName='snappy_location', Item={"location": {"S": "lars-at-home"}})
-
+    dynamodb.put_item(TableName='snappy_location',
+                      Item={"location": {"S": "lars-at-home"},
+                            "sensors": {"L": [{"S": "1"}, {"S": "3"}]},
+                            "actuators": {"L": [{"M": {"factor": {"S":"temperature"},
+                                                       "device": {"S":"2"},
+                                                       "idealfn": {"S":"constant/21"}}}]}})
 
     # Create and initialize DEVICE
 
@@ -38,21 +41,26 @@ def test_startup():
         ],
         BillingMode="PAY_PER_REQUEST"
     )
-    # FIXME: These should have lists of sensors and actuators
     dynamodb.put_item(TableName='snappy_device',
                       Item={"device":{"S":"1",},
                             "class":{"S":"RPi2B+"},
-                            "location":{"S":"lars-at-home"}})
+                            "location":{"S":"lars-at-home"},
+                            "sensors":{"L":[{"S":"temperature"}]},
+                            "actuators":{"L":[]}})
     # "sensors":[], "actuators":["temperature"]
     dynamodb.put_item(TableName='snappy_device',
                       Item={"device":{"S":"2"},
                             "class":{"S":"Thermostat"},
-                            "location":{"S":"lars-at-home"}})
+                            "location":{"S":"lars-at-home"},
+                            "sensors":{"L":[]},
+                            "actuators":{"L":[{"S":"temperature"}]}})
     dynamodb.put_item(TableName='snappy_device',
                       Item={"device":{"S":"3",},
                             "class":{"S":"MBPM1Max"},
                             "location":{"S":"lars-at-home"},
-                            "enabled":{"N":"0"}})
+                            "enabled":{"N":"0"},
+                            "sensors":{"L":[{"S":"temperature"}]},
+                            "actuators":{"L":[]}})
 
     # Create and initialize HISTORY
 
@@ -76,7 +84,11 @@ def test_startup():
     # This should work but there should be no response
     #
 
-    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"1", "class":"RPi2B+", "time":12345, "reading_interval":snappy_data.DEFAULT_READING_INTERVAL}, {})
+    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"1",
+                                                               "class":"RPi2B+",
+                                                               "time":12345,
+                                                               "reading_interval":snappy_data.DEFAULT_READING_INTERVAL},
+                                                    {})
     assert len(responses) == 0
     
     #
@@ -85,7 +97,11 @@ def test_startup():
 
     # The reading interval is different from the default so as to provoke a sent message
     assert 4 != snappy_data.DEFAULT_READING_INTERVAL
-    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"1", "class":"RPi2B+", "time":12345, "reading_interval":4}, {})
+    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"1",
+                                                               "class":"RPi2B+",
+                                                               "time":12345,
+                                                               "reading_interval":4},
+                                                    {})
 
     assert len(responses) == 1
     r0 = responses[0]
@@ -100,7 +116,11 @@ def test_startup():
     # There should be a control message that disables the device
     #
 
-    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"3", "class":"MBPM1Max", "time":12345, "reading_interval":0}, {})
+    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"3",
+                                                               "class":"MBPM1Max",
+                                                               "time":12345,
+                                                               "reading_interval":0},
+                                                    {})
     assert len(responses) == 1
     r0 = responses[0]
     assert len(r0) == 3
