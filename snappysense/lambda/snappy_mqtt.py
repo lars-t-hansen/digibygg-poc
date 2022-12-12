@@ -11,7 +11,7 @@ import json
 def publish(topic, payload, qos):
     iot_client = boto3.client('iot-data', region_name='eu-central-1')
     iot_client.publish(
-        topic=topic
+        topic=topic,
         qos=qos,
         payload=json.dumps(payload)
     )
