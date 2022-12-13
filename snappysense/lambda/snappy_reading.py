@@ -35,7 +35,8 @@ def handle_reading_event(db, event, context):
     if sensor_device_entry == None:
         return []
 
-    return trigger_actuator_if_necessary(db, snappy_data.device_location(sensor_device_entry), time, factor, reading)
+    return trigger_actuator_if_necessary(db, snappy_data.device_location(sensor_device_entry),
+                                         time, factor, reading)
 
 
 # Record the `reading` for the `factor` on the `device` at the `time`. 
@@ -56,8 +57,10 @@ def record_timestamp_and_reading(db, device, time, factor, reading):
 
     history_entry = snappy_data.get_history_entry(db, device)
     if history_entry == None:
-        # A bug somewhere, there should always be a history record because one is created for the
-        # setup message.
+        # There should always be a history record because one is created by the setup message, at
+        # the latest.  The device isn't down, since we just got a message from it.  So there's a bug
+        # somewhere, but it could be outside the program, eg, databases could have been
+        # reinitialized while a message was in transit.
         return None
 
     # Update the history entry with time and reading, and save it.
@@ -107,21 +110,17 @@ def trigger_actuator_if_necessary(db, location, time, factor, last_reading):
         # Should have been created
         return []
 
-    # Record last contact
-
-    snappy_data.set_history_last_contact(history_entry, time)
-
     # QoS1 to ensure that the message is received.
     # Send a command to the device to update itself if necessary
 
     outgoing = None
     if ideal != last_reading:
         outgoing = {"factor":factor, "reading":last_reading, "ideal":ideal}
-        # TODO: Record last command in history
+        snappy_data.history_entry_add_action(history_entry, factor, time, last_reading, ideal)
 
-    snappy_data.write_history_entry(history_entry)
-
-    if outgoing is not None:
+    if outgoing != None:
+        snappy_data.set_history_last_contact(history_entry, time)
+        snappy_data.write_history_entry(db, history_entry)
         device_class = snappy_data.device_class(device_entry)
         return [[f"snappy/control/{device_class}/{device_name}", outgoing, 1]]
 
@@ -154,9 +153,9 @@ def evaluate_ideal(idealfn_string):
     if alen == 0:
         ideal = idealfn["fn"]()
     elif alen == 1:
-        ideal = idealfn["fn"](float(args[0]))
+        ideal = idealfn["fn"](int(args[0]))
     elif alen == 2:
-        ideal = idealfn["fn"](float(args[0]), float(args[1]))
+        ideal = idealfn["fn"](int(args[0]), int(args[1]))
 
     return ideal
 

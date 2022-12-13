@@ -88,13 +88,16 @@ def get_history_entry(db, device):
 def write_history_entry(db, history_entry):
     db.put_item(TableName='snappy_history', Item=history_entry)
 
-# This will get the history entry if it exists, otherwise it will create a new one, but it will *not*
-# persist that entry in the database.
+# This will get the history entry if it exists, otherwise it will create a new one, but it will
+# *not* persist that entry in the database.
 
 def get_history_entry_or_create(db, device):
     history_entry = get_history_entry(db, device)
     if history_entry == None:
-        history_entry = {"device":{"S": device}, "last_contact": {"N":"0"}, "readings": {"L": []}, "actions": {"L":[]}}
+        history_entry = {"device":       {"S": device},
+                         "last_contact": {"N":"0"},
+                         "readings":     {"L": []},
+                         "actions":      {"L":[]}}
     return history_entry
 
 def history_last_contact(history_entry):
@@ -105,11 +108,18 @@ def set_history_last_contact(history_entry, time):
 
 # These nested structures are hellish.
 #
-# history ::= { ...,
-#               "readings": {
-#                   "L": [ { "M": { "factor": {"S", str},
-#                                   "last":   {"L": [ {"M": {"time": {"N",str},
-#                                                            "value": {"N",str}}}, ... ]}}} ] }}
+# history ::= {
+#   ...,
+#   "readings": {
+#       "L": [ { "M": { "factor": {"S", str},
+#                       "last":   {"L": [ {"M": {"time":  {"N",str},
+#                                                "value": {"N",str}}}, ... ]}}} ] },
+#   "actions": {
+#       "L": [ { "M": { "factor": {"S", str},
+#                       "last":   {"L": [ {"M": {"time":    {"N",str},
+#                                                "reading": {"N",str}}},
+#                                                "ideal":   {"N",str}}}, ... ]}}} ] }
+# }
 
 # This creates a sensible structure: a list of objects with keys "temperature", "time", say
 def history_readings(history_entry):
@@ -117,34 +127,50 @@ def history_readings(history_entry):
     for reading in history_entry["readings"]["L"]:
         factor_name = reading["M"]["factor"]["S"]
         for last in reading["M"]["last"]["L"]:
-            res.append({"time": int(last["M"]["time"]["N"]), factor_name: int(last["M"]["value"]["N"])})
+            res.append({"time":      int(last["M"]["time"]["N"]),
+                        factor_name: int(last["M"]["value"]["N"])})
     return res
 
 def history_entry_add_reading(history_entry, factor, time, reading):
     factor_entry = find_for_factor(history_entry, "readings", factor)
 
     # Push the new one onto the front and retire old ones from the end
-    factor_entry.insert(0, {"M": {"time": {"N":str(time)}, "value": {"N": str(reading)}}})
+    factor_entry.insert(0, {"M": {"time":  {"N": str(time)},
+                                  "value": {"N": str(reading)}}})
+
     while len(factor_entry) > MAX_FACTOR_HISTORY:
         factor_entry.pop()
+
+def history_actions(history_entry):
+    res = []
+    for reading in history_entry["actions"]["L"]:
+        factor_name = reading["M"]["factor"]["S"]
+        for last in reading["M"]["last"]["L"]:
+            res.append({"time":      int(last["M"]["time"]["N"]),
+                        factor_name: int(last["M"]["reading"]["N"]),
+                        "ideal":     int(last["M"]["ideal"]["N"])})
+    return res
 
 def history_entry_add_action(history_entry, factor, time, reading, ideal):
     factor_entry = find_for_factor(history_entry, "actions", factor)
 
     # Push the new one onto the front and retire old ones from the end
-    factor_entry.insert(0, {"M":{"time": {"N":str(time)}, "reading": {"N": str(reading)}, "ideal": {"N": str(ideal)}}})
+    factor_entry.insert(0, {"M": {"time":    {"N": str(time)},
+                                  "reading": {"N": str(reading)},
+                                  "ideal":   {"N": str(ideal)}}})
     while len(factor_entry) > MAX_ACTION_HISTORY:
         factor_entry.pop()
 
 def find_for_factor(history_entry, which, factor):
     factor_entry = None
     for f in history_entry[which]["L"]:
-        if f["M"]["factor"] == factor:
+        if f["M"]["factor"]["S"] == factor:
             factor_entry = f
             break
 
     if factor_entry == None:
-        factor_entry = {"M": {"factor": {"S": factor}, "last": {"L":[]}}}
+        factor_entry = {"M": {"factor": {"S": factor},
+                              "last":   {"L":[]}}}
         history_entry[which]["L"].append(factor_entry)
 
     return factor_entry["M"]["last"]["L"]

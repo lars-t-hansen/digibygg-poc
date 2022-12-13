@@ -81,27 +81,36 @@ def test_startup():
     import snappy_data
 
     #
-    # This should work but there should be no response
+    # TEST: Simple startup event with default reading interval.
+    #
+    # This should work but there should be no response, as the device remains enabled and the
+    # reading interval is the default.
     #
 
-    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"1",
-                                                               "class":"RPi2B+",
-                                                               "time":12345,
-                                                               "reading_interval":snappy_data.DEFAULT_READING_INTERVAL},
-                                                    {})
+    responses = snappy_startup.handle_startup_event(
+        dynamodb,
+        {"device":           "1",
+         "class":            "RPi2B+",
+         "time":             12345,
+         "reading_interval": snappy_data.DEFAULT_READING_INTERVAL},
+        {})
     assert len(responses) == 0
     
     #
-    # There should be a control message that changes the reading interval for this device
+    # TEST: Startup event with subsequent control message for reading interval.
+    #
+    # A control message should be generated that changes the reading interval for this device, since
+    # the interval the device reports differs from the default in the database.
     #
 
-    # The reading interval is different from the default so as to provoke a sent message
     assert 4 != snappy_data.DEFAULT_READING_INTERVAL
-    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"1",
-                                                               "class":"RPi2B+",
-                                                               "time":12345,
-                                                               "reading_interval":4},
-                                                    {})
+    responses = snappy_startup.handle_startup_event(
+        dynamodb,
+        {"device":           "1",
+         "class":            "RPi2B+",
+         "time":             12345,
+         "reading_interval": 4},
+        {})
 
     assert len(responses) == 1
     r0 = responses[0]
@@ -113,14 +122,19 @@ def test_startup():
     assert r0[2] == 1
     
     #
-    # There should be a control message that disables the device
+    # TEST: Startup even with subsequent control message for disablement.
+    #
+    # There should be a control message that disables the device because it is marked in the DB as
+    # disabled.
     #
 
-    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"3",
-                                                               "class":"MBPM1Max",
-                                                               "time":12345,
-                                                               "reading_interval":0},
-                                                    {})
+    responses = snappy_startup.handle_startup_event(
+        dynamodb,
+        {"device":           "3",
+         "class":            "MBPM1Max",
+         "time":             12345,
+         "reading_interval": 0},
+        {})
     assert len(responses) == 1
     r0 = responses[0]
     assert len(r0) == 3

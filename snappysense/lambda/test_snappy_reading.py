@@ -80,16 +80,34 @@ def test_startup():
     import snappy_reading
     import snappy_data
 
-    # We need a setup message to ensure that there's a history element, this is part of the
-    # protocol.  The code is resilient in the face of a failure in this, but the tests below are not
-    # (and should not be).
+    #
+    # SETUP.
+    #
+    # We need some startup messages to ensure that there are history elements for the devices
+    # we test, this is part of the protocol.  The code should be resilient in the face of a failure
+    # in this, but that should be tested separately.
+    #
+    # (Startup is also tested more thoroughly by test_snappy_startup.py.)
+    #
 
-    responses = snappy_startup.handle_startup_event(dynamodb, {"device":"1",
-                                                               "class":"RPi2B+",
-                                                               "time":1,
-                                                               "reading_interval":0},
-                                                    {})
+    responses = snappy_startup.handle_startup_event(
+        dynamodb,
+        {"device":           "1",
+         "class":            "RPi2B+",
+         "time":             1,
+         "reading_interval": 0},
+        {})
 
+    responses = snappy_startup.handle_startup_event(
+        dynamodb,
+        {"device":           "2",
+         "class":            "Thermostat",
+         "time":             2,
+         "reading_interval": 0},
+        {})
+
+    #
+    # TEST: Simple reading without consequent action.
     #
     # This should work but there should be no response, as the reading is already at
     # the ideal for the location.
@@ -100,12 +118,14 @@ def test_startup():
     r1 = snappy_data.history_readings(h1)
     assert len(r1) == 0
 
-    responses = snappy_reading.handle_reading_event(dynamodb, {"device":"1",
-                                                               "class":"RPi2B+",
-                                                               "time":12345,
-                                                               "factor":"temperature",
-                                                               "reading":21},
-                                                    {})
+    responses = snappy_reading.handle_reading_event(
+        dynamodb,
+        {"device":  "1",
+         "class":   "RPi2B+",
+         "time":    12345,
+         "factor":  "temperature",
+         "reading": 21},
+        {})
     assert len(responses) == 0
 
     h1 = snappy_data.get_history_entry(dynamodb, "1")
@@ -113,6 +133,50 @@ def test_startup():
     r1 = snappy_data.history_readings(h1)
     assert len(r1) == 1
     assert r1[0]["temperature"] == 21
+    a1 = snappy_data.history_actions(h1)
+    assert len(a1) == 0
 
-    # TODO: Here we can assert that:
-    # - the list of actions for the temperature actuator at the location is still empty
+    # Device #2 is the only actuator at the given location.  Its actions list should still be empty,
+    # as the temperature was at the ideal, and it should not have been marked as contacted during
+    # the last event.
+
+    h2 = snappy_data.get_history_entry(dynamodb, "2")
+    assert snappy_data.history_last_contact(h2) < 12345
+    r2 = snappy_data.history_readings(h2)
+    assert len(r2) == 0
+    a2 = snappy_data.history_actions(h2)
+    assert len(a2) == 0
+
+    #
+    # TEST: Reading with consequent action.
+    #
+    # Here we should have a response to change the temperature, since the reading differs from the
+    # ideal at the location.  The action should be recorded in the action list for the temperature
+    # actuator at the location, not in the action list for the sensor.
+    #
+
+    responses = snappy_reading.handle_reading_event(
+        dynamodb,
+        {"device":  "1",
+         "class":   "RPi2B+",
+         "time":    12346,
+         "factor":  "temperature",
+         "reading": 19},
+        {})
+    assert len(responses) == 1
+
+    h1 = snappy_data.get_history_entry(dynamodb, "1")
+    assert snappy_data.history_last_contact(h1) == 12346
+    r1 = snappy_data.history_readings(h1)
+    assert len(r1) == 2
+    assert r1[0]["temperature"] == 19
+    assert r1[1]["temperature"] == 21
+    a1 = snappy_data.history_actions(h1)
+    assert len(a1) == 0
+
+    h2 = snappy_data.get_history_entry(dynamodb, "2")
+    assert snappy_data.history_last_contact(h1) == 12346
+    r2 = snappy_data.history_readings(h2)
+    assert len(r2) == 0
+    a2 = snappy_data.history_actions(h2)
+    assert len(a2) == 1
