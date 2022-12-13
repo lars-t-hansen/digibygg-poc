@@ -175,8 +175,14 @@ def test_startup():
     assert len(a1) == 0
 
     h2 = snappy_data.get_history_entry(dynamodb, "2")
-    assert snappy_data.history_last_contact(h1) == 12346
+    assert snappy_data.history_last_contact(h2) == 12346
     r2 = snappy_data.history_readings(h2)
     assert len(r2) == 0
     a2 = snappy_data.history_actions(h2)
     assert len(a2) == 1
+    assert "temperature" in a2[0]
+    assert "time" in a2[0]
+    assert "ideal" in a2[0]
+    assert a2[0]["temperature"] == 19
+    assert a2[0]["ideal"] == 21
+    assert a2[0]["time"] == 12346
