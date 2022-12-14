@@ -1,6 +1,8 @@
-[//]: # -*- fill-column: 100 -*-
+-*- fill-column: 100 -*-
 
 # SnappySense data model
+
+For notes on the overall design, see design.md in this directory.
 
 ## Location
 
@@ -12,10 +14,10 @@ Observe that the actuators incorporate data about desired settings for the locat
 attribute is either an `ideal-id` or an `ideal-id` concatenated with constant parameters, separated
 by slashes, see example below.
 
-Possible bug: even if this does not have a geolocation (though it could), it might usefully have a
-time zone.
-
 DynamoDB table name: `snappy_location`.  Primary key: `location`.
+
+TODO: Even if this does not have a geolocation (though it could), it might usefully have a
+time zone, so that computing eg "work time" vs "non-work time" is possible.
 
 ```
 LOCATION
@@ -41,14 +43,17 @@ Example:
 ## Device
 
 An entry in `DEVICE` represents a single device, which can be a sensor or an actuator or both.  The
-default for `enabled` is True.  The default for `reading_interval` is something sensible on the
-order of 1 hour.
-
-Possible bug: It's possible that the `reading_interval` on a device should be per factor and not for
-the device as a whole, and that the default `reading_interval` for a factor should be stored in
-`FACTOR`.
+default for `enabled` is 1.  The default for `reading_interval` is something sensible.
 
 DynamoDB table name: `snappy_device`.  Primary key: `device`.  Sort key: `class`.
+
+TODO: It's possible that the `reading_interval` on a device should be per factor and not for the
+device as a whole, and that the default `reading_interval` for a factor should be stored in
+`FACTOR`.
+
+TODO: Not obvious that the sort key is necessary.
+
+TODO: Booleans are a thing, `enabled` need not be an int.
 
 ```
 DEVICE
@@ -78,14 +83,14 @@ part of `DEVICE` but are very busy, while `DEVICE` is highly connected and mostl
 
 The number of readings and the number of actions to keep is TBD, but maybe 10 and 5.
 
+DynamoDB table name: `snappy_history`.  Primary key: `device`.
+
 TODO: There can be additional fields keeping longer-term historical data for the device, but if the
 record becomes large these should be split into separate tables.
 
-Possible bug: `HISTORY` represents a number of tables, one per factor or actuator, but there are
-probably few factors per device and the `HISTORY` entry is always updated for all factors at the
-same time.
-
-DynamoDB table name: `snappy_history`.  Primary key: `device`.
+TODO: `HISTORY` represents a number of tables, one per factor or actuator, and we could consider
+splitting them up.  However there are probably few factors per device and the `HISTORY` entry is
+always updated for all factors at the same time.
 
 ```
 HISTORY
@@ -140,7 +145,7 @@ FACTOR
 ```
 Example:
 ```
-    factor: "work_temperature",
+    factor: "temperature",
     description: "Temperature in degrees Celsius"
 ```
 
@@ -160,6 +165,14 @@ IDEAL
 
 Example:
 ```
+    ideal: "constant",
+    arity: 1,
+    description: "Returns its argument"
+```
+
+Example:
+```
     ideal: "work_temperature",
-    description: "Adjusts temperature according to a normal workday.  Arguments are temperatures for working hours and off hours"
+    arity: 2,
+    description: "Adjust temperature according to a workday.  Arguments are temperatures for working hours and off hours"
 ```

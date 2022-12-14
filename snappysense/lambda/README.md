@@ -1,4 +1,6 @@
-[//]: # -*- fill-column: 100 -*-
+-*- fill-column: 100 -*-
+
+# SnappySense back-end (AWS Lambda)
 
 This is prototype AWS Lambda code for the SnappySense back-end.
 
