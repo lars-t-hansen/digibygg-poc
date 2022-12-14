@@ -110,6 +110,11 @@ HISTORY
     ... additional history fields
 ```
 
+## Aggregate
+
+TODO: This is a table keyed on location (and maybe other things) that holds aggregate readings
+per locations.
+
 ## Class
 
 There is one entry in `CLASS` for each device class.  These are are mostly informational and for
