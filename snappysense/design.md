@@ -2,6 +2,8 @@
 
 # SnappySense 2022/2023
 
+(Dette er fremdeles ganske røfft.)
+
 ## Overordnet beskrivelse
 
 Vi skal ha massevis av sensorer som måler "ting" (om inneklima, i utgangspunktet) som
