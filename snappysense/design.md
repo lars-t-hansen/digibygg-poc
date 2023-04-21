@@ -6,46 +6,53 @@
 
 ## Overordnet beskrivelse
 
-Vi skal ha massevis av sensorer som måler "ting" (om inneklima, i utgangspunktet) som
-diskrete verdier og rapporterer disse til en server, der de kan prosesseres (aggregeres,
-vises, trackes, sammenliknes) ytterligere.  Noen av målingene kan brukes i praksis til å regulere
-inneklima automatisk, redusere strømforbruk, justere belysning, slå ned på arbeidsmiljøbrudd, etc.
+Vi skal ha massevis av sensorer som måler "ting" (om inneklima, i utgangspunktet) som diskrete
+verdier og rapporterer disse til en server, der de kan prosesseres (aggregeres, vises, trackes,
+sammenliknes) ytterligere.  Noen av målingene kan brukes i praksis til å regulere inneklima
+automatisk, redusere strømforbruk, justere belysning, slå ned på arbeidsmiljøbrudd, etc.
 
-Slides for et prosjekt fra 2018 [her](https://docs.google.com/presentation/d/1pNtJcxtTt6Bbb4HUHGkJigYjLfQWiu_VPyDU1leiLwc/edit#slide=id.g4f6f66adc2_1_1),
+Slides for et prosjekt fra 2018
+[her](https://docs.google.com/presentation/d/1pNtJcxtTt6Bbb4HUHGkJigYjLfQWiu_VPyDU1leiLwc/edit#slide=id.g4f6f66adc2_1_1),
 "SnappySense".  Mye motivasjon og noe arkitektur.
 
 Vi har et repo på github [her](https://github.com/knowit/digibygg-poc).  Har ikke funnet veldig mye
-eksisterende design utover presentasjonen over, koden, og to [åpne](https://github.com/knowit/Dataplattform-issues/issues/101)
-[issues](https://github.com/knowit/Dataplattform-issues/issues/98) på Dataplattform.  Det ligger heller
-ikke noe på noe wiki, som jeg har funnet.
+eksisterende design utover presentasjonen over, koden, og to
+[åpne](https://github.com/knowit/Dataplattform-issues/issues/101)
+[issues](https://github.com/knowit/Dataplattform-issues/issues/98) på Dataplattform.  Det ligger
+heller ikke noe på noe wiki, som jeg har funnet.
 
-Det er imidlertid noen sensor-ideer rapportert som [issues på digibygg-poc](https://github.com/knowit/digibygg-poc/issues).
+Det er imidlertid noen sensor-ideer rapportert som [issues på
+digibygg-poc](https://github.com/knowit/digibygg-poc/issues).
 
-I samtale med Tor kom det opp at for eksempel støy, lysforhold, temperatur, luftkvalitet, og UV kunne være aktuelle faktorer.
+I samtale med Tor kom det opp at for eksempel støy, lysforhold, temperatur, luftkvalitet, og UV
+kunne være aktuelle faktorer.
 
-Hvordan tenker vi oss bruksmønsteret for disse dataene?  Sannsyligvis vil vi legge opp til at målinger
-dukker opp som events på server og at det er funksjoner som kjøres når det kommer nye data, at det er
-dashboards som viser data, at data kan aggregeres over tid, o.l., og kanskje også at alle rådata lagres
-uten annet enn evt vask for sammenlikning av arbeidssteder og tracking over tid.
+Hvordan tenker vi oss bruksmønsteret for disse dataene?  Sannsyligvis vil vi legge opp til at
+målinger dukker opp som events på server og at det er funksjoner som kjøres når det kommer nye data,
+at det er dashboards som viser data, at data kan aggregeres over tid, o.l., og kanskje også at alle
+rådata lagres uten annet enn evt vask for sammenlikning av arbeidssteder og tracking over tid.
 
-Selv om det ikke er åpenbart at noe skal pushes tilbake til devicet for indikasjon på at "nå har du det dårlig" så kan
-dette likevel være en greie å ekseperimentere med - enten et lite LED display eller noen LEDs som har et trafikklys.
+Selv om det ikke er åpenbart at noe skal pushes tilbake til devicet for indikasjon på at "nå har du
+det dårlig" så kan dette likevel være en greie å ekseperimentere med - enten et lite LED display
+eller noen LEDs som har et trafikklys.
 
 Datavolum, nettverkstrafikk, filtrering og diskaksess kan bli en greie mht kostnad hvis det er mange
 nok sensorer med høy nok frekvens.  Se nedenfor.
 
-Eksisterende PoC for en esp32 ([kode her](https://github.com/knowit/digibygg-poc/blob/master/esp32_bme280/src/main.c))
-rapporterer temperatur, luftfuktighet, og trykk, sammen med sin sensor-id.  Se nedenfor for mer om koden.
+Eksisterende PoC for en esp32 ([kode
+her](https://github.com/knowit/digibygg-poc/blob/master/esp32_bme280/src/main.c)) rapporterer
+temperatur, luftfuktighet, og trykk, sammen med sin sensor-id.  Se nedenfor for mer om koden.
 
 Det er ikke bare det at vi ønsker oss målinger, men vi ønsker oss også å eksperimentere med for
-eksempel OTA oppdatering av koden på devicene, endring av configurasjon på devicene, fleet management
-på andre måter (finne ødelagte devices, sikkert mye annet).  Derfor bør devicene ha mulighet
-for dette selv om vi strengt tatt ikke ville trengt å ha det.
+eksempel OTA oppdatering av koden på devicene, endring av configurasjon på devicene, fleet
+management på andre måter (finne ødelagte devices, sikkert mye annet).  Derfor bør devicene ha
+mulighet for dette selv om vi strengt tatt ikke ville trengt å ha det.
 
 
 ## Eksisterende kode
 
-Eksisterende kode: https://github.com/knowit/digibygg-poc, skrevet for en esp32 variant med Mongoose og MQTT.
+Eksisterende kode: https://github.com/knowit/digibygg-poc, skrevet for en esp32 variant med Mongoose
+og MQTT.
 
 Virker halvferdig på device?  Logikken ser grei ut men konfigurasjonen er litt uklar.
 
@@ -54,7 +61,8 @@ Mye server kode her:
 - koden er fra sept 2018 med kommentar "clean up dependencies later" så kanhende dette var en veldig tidlig prototyp
 - virker også som en ganske gammeldags aws konfigurasjon?
 
-En annen versjon for Arduino+Firebase (Google Cloud) her: https://github.com/petterlovereide/froggy-sense/blob/master/code/code.ino
+En annen versjon for Arduino+Firebase (Google Cloud) her:
+https://github.com/petterlovereide/froggy-sense/blob/master/code/code.ino
 
 ## Hardware
 
